@@ -16,6 +16,9 @@ import kotlinx.coroutines.launch
 import dagger.hilt.android.AndroidEntryPoint
 import fr.groggy.racecontrol.tv.R
 import fr.groggy.racecontrol.tv.f1tv.Archive
+import fr.groggy.racecontrol.tv.ui.info.RaceCalendarActivity
+import fr.groggy.racecontrol.tv.ui.info.ResultsBrowserActivity
+import fr.groggy.racecontrol.tv.ui.info.StandingsActivity
 import fr.groggy.racecontrol.tv.ui.season.archive.SeasonArchiveActivity
 import fr.groggy.racecontrol.tv.ui.season.browse.Season
 import fr.groggy.racecontrol.tv.ui.season.browse.SeasonBrowseActivity
@@ -65,6 +68,7 @@ class HomeFragment : RowsSupportFragment(), OnItemViewClickedListener {
         val viewModel: HomeViewModel by viewModels()
 
         archivesRow = getArchiveRow(viewModel.listArchive())
+        homeEntriesAdapter.add(getExploreRow())
 
         lifecycleScope.launch {
             lifecycle.repeatOnLifecycle(Lifecycle.State.CREATED) {
@@ -72,6 +76,14 @@ class HomeFragment : RowsSupportFragment(), OnItemViewClickedListener {
                     .collect(::onUpdatedSeason)
             }
         }
+    }
+
+    private fun getExploreRow(): ListRow {
+        val adapter = ArrayObjectAdapter(HomeItemPresenter())
+        adapter.add(HomeItem(HomeItemType.RACE_CALENDAR, getString(R.string.menu_race_calendar)))
+        adapter.add(HomeItem(HomeItemType.STANDINGS, getString(R.string.menu_standings)))
+        adapter.add(HomeItem(HomeItemType.RESULTS, getString(R.string.menu_results)))
+        return ListRow(HeaderItem(getString(R.string.menu_hub)), adapter)
     }
 
     private fun onUpdatedSeason(season: Season) {
@@ -192,6 +204,9 @@ class HomeFragment : RowsSupportFragment(), OnItemViewClickedListener {
                 HomeItemType.ARCHIVE_ALL -> {
                     SeasonArchiveActivity.intent(requireContext())
                 }
+                HomeItemType.RACE_CALENDAR -> RaceCalendarActivity.intent(requireContext())
+                HomeItemType.STANDINGS -> StandingsActivity.intent(requireContext())
+                HomeItemType.RESULTS -> ResultsBrowserActivity.intent(requireContext())
             }
             else -> null
         }

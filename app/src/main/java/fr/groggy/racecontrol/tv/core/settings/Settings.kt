@@ -23,7 +23,12 @@ data class Settings(
     /** F1TV account email (stored locally for auto-fill). */
     val f1Username: String,
     /** F1TV account password (stored locally for auto-fill). */
-    val f1Password: String
+    val f1Password: String,
+    /**
+     * Default series filter for home / season browse.
+     * Preference values: ALL, F1, F2, F3, F1A, PSC.
+     */
+    val defaultSeries: String
 ) {
     enum class StreamType(val rawName: String) {
         HLS("HLS"), DASH("DASH"), DASH_HLS("HLS")
@@ -48,10 +53,12 @@ data class Settings(
             autoSelectCustomRadio = true,
             restrictCustomRadioToLiveSessions = false,
             f1Username = "",
-            f1Password = ""
+            f1Password = "",
+            defaultSeries = "ALL"
         )
 
         const val KEY_BYPASS_CHANNEL_SELECTION = "bypass_channel_selection"
+        const val KEY_DEFAULT_SERIES = "default_series"
         const val KEY_DISPLAY_THUMBNAILS_ENABLED = "display_thumbnails_enabled"
         const val KEY_OPEN_WITH_EXTERNAL_PLAYER = "open_with_external_player"
         const val KEY_DISABLE_HDR_PLAYBACK = "disable_hdr_playback"

@@ -1,29 +1,48 @@
 <?xml version="1.0" encoding="utf-8"?>
-<RelativeLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/playback_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:keepScreenOn="true">
+    android:background="@color/f1_black_deep"
+    android:keepScreenOn="true"
+    android:orientation="horizontal">
 
-    <androidx.fragment.app.FragmentContainerView
-        android:id="@+id/fragment_container"
-        android:name="fr.groggy.racecontrol.tv.ui.LoadingFragment"
-        android:layout_width="match_parent"
+    <FrameLayout
+        android:id="@+id/main_playback_pane"
+        android:layout_width="0dp"
         android:layout_height="match_parent"
-        android:keepScreenOn="true"/>
+        android:layout_weight="1"
+        android:keepScreenOn="true">
 
-    <TextView
-        android:id="@+id/closed_captions"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_alignParentBottom="true"
-        android:visibility="gone"
-        android:layout_margin="62dp"
-        android:textSize="24sp"
-        android:textColor="@android:color/white"
-        android:background="#80000000"
-        tools:visibility="visible"
-        tools:text="I am a closed caption"/>
+        <androidx.fragment.app.FragmentContainerView
+            android:id="@+id/fragment_container"
+            android:name="fr.groggy.racecontrol.tv.ui.LoadingFragment"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:keepScreenOn="true" />
 
-</RelativeLayout>
+        <TextView
+            android:id="@+id/closed_captions"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom"
+            android:layout_margin="62dp"
+            android:background="#80000000"
+            android:textColor="@android:color/white"
+            android:textSize="24sp"
+            android:visibility="gone"
+            tools:text="I am a closed caption"
+            tools:visibility="visible" />
+    </FrameLayout>
+
+    <LinearLayout
+        android:id="@+id/multi_cam_column"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="0"
+        android:background="@color/f1_black_deep"
+        android:orientation="vertical"
+        android:visibility="gone" />
+
+</LinearLayout>

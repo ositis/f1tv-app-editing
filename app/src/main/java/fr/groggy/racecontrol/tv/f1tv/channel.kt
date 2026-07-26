@@ -52,18 +52,29 @@ sealed class F1TvBasicChannelType {
     data class Unknown(val type: String, val name: String) : F1TvBasicChannelType()
 
     companion object {
-        fun from(type: String, name: String): F1TvBasicChannelType =
-            when(type) {
+        /**
+         * Prefer stable [identifier] (PRES/WIF/TRACKER/DATA) over localized [name].
+         */
+        fun from(type: String, name: String, identifier: String? = null): F1TvBasicChannelType {
+            when (identifier?.trim()?.uppercase()) {
+                "WIF" -> return Wif
+                "PRES", "F1LIVE", "F1 LIVE" -> return F1Live
+                "TRACKER" -> return Tracker
+                "DATA" -> return Data
+                "PIT LANE", "PITLANE", "PLP" -> return PitLane
+            }
+            return when (type.lowercase()) {
                 "wif" -> Wif
-                "additional" -> when(name.lowercase()) {
-                    "f1live" -> F1Live
-                    "pit lane" -> PitLane
+                "additional" -> when (name.lowercase()) {
+                    "f1live", "f1 live" -> F1Live
+                    "pit lane", "pitlane" -> PitLane
                     "tracker" -> Tracker
                     "data" -> Data
                     else -> Unknown(type, name)
                 }
                 else -> Unknown(type, name)
             }
+        }
     }
 }
 

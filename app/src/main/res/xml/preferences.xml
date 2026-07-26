@@ -24,6 +24,18 @@
 
     </PreferenceCategory>
 
+    <PreferenceCategory android:title="@string/settings_category_browse_title">
+
+        <ListPreference
+            android:key="default_series"
+            android:title="@string/settings_default_series_title"
+            android:summary="%s"
+            android:entries="@array/default_series_entries"
+            android:entryValues="@array/default_series_values"
+            android:defaultValue="ALL" />
+
+    </PreferenceCategory>
+
     <PreferenceCategory android:title="@string/settings_category_player_title">
 
         <SwitchPreference

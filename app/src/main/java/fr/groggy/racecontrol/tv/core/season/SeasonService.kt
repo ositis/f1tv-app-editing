@@ -5,6 +5,7 @@ import android.util.Log
 import fr.groggy.racecontrol.tv.core.event.EventRepository
 import fr.groggy.racecontrol.tv.core.session.SessionRepository
 import fr.groggy.racecontrol.tv.core.session.SessionService
+import fr.groggy.racecontrol.tv.core.settings.SettingsRepository
 import fr.groggy.racecontrol.tv.f1tv.*
 import fr.groggy.racecontrol.tv.ui.season.browse.Event
 import fr.groggy.racecontrol.tv.ui.season.browse.Image
@@ -25,7 +26,8 @@ class SeasonService @Inject constructor(
     private val f1Tv: F1TvClient,
     private val sessionService: SessionService,
     private val eventRepository: EventRepository,
-    private val sessionRepository: SessionRepository
+    private val sessionRepository: SessionRepository,
+    private val settingsRepository: SettingsRepository
 ) {
     companion object {
         private val TAG = SeasonService::class.simpleName
@@ -84,8 +86,13 @@ class SeasonService @Inject constructor(
     private fun sessions(ids: List<F1TvEventId>): Flow<List<Session>> =
         sessionRepository.observe(ids)
 //            .onEach { Log.d(TAG, "Sessions changed") }
-            .flatMapLatest { sessions -> sessions
+            .flatMapLatest { sessions ->
+                val seriesFilter = RacingSeries.fromPreference(
+                    settingsRepository.getCurrent().defaultSeries
+                )
+                sessions
                 .filter { it.available && it.channels.isNotEmpty() }
+                .filter { seriesFilter == RacingSeries.ALL || it.series == seriesFilter }
                 .sortedByDescending { it.period.start }
                 .traverse { session -> thumbnail(session)
                     .map { thumbnail -> Session(
@@ -94,6 +101,7 @@ class SeasonService @Inject constructor(
                         name = session.name,
                         largePictureUrl =session.largePictureUrl,
                         contentSubtype = session.contentSubtype,
+                        series = session.series,
                         thumbnail = thumbnail,
                         channels = session.channels
                     ) }

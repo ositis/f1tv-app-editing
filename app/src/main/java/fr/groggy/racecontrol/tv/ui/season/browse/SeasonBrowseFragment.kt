@@ -24,6 +24,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import fr.groggy.racecontrol.tv.R
 import fr.groggy.racecontrol.tv.core.settings.SettingsRepository
 import fr.groggy.racecontrol.tv.f1tv.Archive
+import fr.groggy.racecontrol.tv.f1tv.RacingSeries
 import fr.groggy.racecontrol.tv.ui.event.EventListRowDiffCallback
 import fr.groggy.racecontrol.tv.ui.session.SessionCardPresenter
 import fr.groggy.racecontrol.tv.ui.session.browse.SessionBrowseActivity
@@ -116,7 +117,12 @@ class SeasonBrowseFragment : BrowseSupportFragment(), OnItemViewClickedListener 
     }
 
     private fun onUpdatedSeason(season: Season) {
-        title = season.name
+        val seriesFilter = RacingSeries.fromPreference(settingsRepository.getCurrent().defaultSeries)
+        title = if (seriesFilter == RacingSeries.ALL) {
+            season.name
+        } else {
+            "${season.name} · ${seriesFilter.badge}"
+        }
         val existingListRows = eventsAdapter.unmodifiableList<ListRow>()
         val newEventRows = season.events
             .filter { it.sessions.isNotEmpty() }

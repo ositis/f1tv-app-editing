@@ -25,8 +25,8 @@ class F1TvClient @Inject constructor(
 ) {
 
     companion object {
-        const val MAIN_IMAGE_WIDTH = 313
-        const val MAIN_IMAGE_HEIGHT = 176
+        const val MAIN_IMAGE_WIDTH = 640
+        const val MAIN_IMAGE_HEIGHT = 360
 
         private val TAG = F1TvClient::class.simpleName
         private const val ROOT_URL = "https://f1tv.formula1.com"
@@ -96,6 +96,11 @@ class F1TvClient @Inject constructor(
                     largePictureUrl = LARGE_PICTURE_URL.format(it.metadata.pictureUrl),
                     name = it.metadata.title,
                     contentSubtype = it.metadata.contentSubtype,
+                    series = RacingSeries.classify(
+                        uiSeries = null,
+                        series = null,
+                        title = it.metadata.title
+                    ),
                     period = InstantPeriod(
                         start = archiveSortInstant,
                         end = archiveSortInstant
@@ -126,6 +131,11 @@ class F1TvClient @Inject constructor(
                     largePictureUrl = LARGE_PICTURE_URL.format(it.metadata.pictureUrl),
                     name = it.metadata.title,
                     contentSubtype = it.metadata.contentSubtype,
+                    series = RacingSeries.classify(
+                        uiSeries = it.metadata.uiSeries,
+                        series = it.metadata.emfAttributes.series,
+                        title = it.metadata.title
+                    ),
                     period = InstantPeriod(
                         start = parseOffsetDateSafely(it.metadata.emfAttributes.startDate),
                         end = parseOffsetDateSafely(it.metadata.emfAttributes.endDate)
@@ -187,6 +197,11 @@ class F1TvClient @Inject constructor(
                     largePictureUrl = LARGE_PICTURE_URL.format(it.metadata.pictureUrl),
                     name = it.metadata.title,
                     contentSubtype = dateTimeFormatter.format(Instant.ofEpochMilli(it.metadata.emfAttributes.sessionStartDate)),
+                    series = RacingSeries.classify(
+                        uiSeries = it.metadata.uiSeries,
+                        series = it.metadata.emfAttributes.series,
+                        title = it.metadata.title
+                    ),
                     period = InstantPeriod(
                         start = Instant.ofEpochMilli(it.metadata.emfAttributes.sessionStartDate),
                         end = Instant.ofEpochMilli(it.metadata.emfAttributes.sessionEndDate)
@@ -236,7 +251,7 @@ class F1TvClient @Inject constructor(
                     F1TvBasicChannel(
                         channelAndContentId.second.ifEmpty { null },
                         channelAndContentId.first,
-                        type = F1TvBasicChannelType.from(it.type, it.title)
+                        type = F1TvBasicChannelType.from(it.type, it.title, it.identifier)
                     )
                 }
             } ?: listOf()

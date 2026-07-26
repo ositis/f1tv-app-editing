@@ -1,4 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="fastlane_background">#0096a6</color>
-    <color name="card_background">#37474F</color>
+    <!-- F1-inspired TV palette (revamp P0) -->
+    <color name="f1_black">#15151E</color>
+    <color name="f1_black_elevated">#1F1F2B</color>
+    <color name="f1_black_deep">#0A0A0F</color>
+    <color name="f1_red">#E10600</color>
+    <color name="f1_red_dim">#B00500</color>
+    <color name="f1_white">#FFFFFF</color>
+    <color name="f1_silver">#C8C8D0</color>
+    <color name="f1_muted">#8D8D9A</color>
+    <color name="f1_divider">#2A2A36</color>
+    <color name="f1_replay">#3D3D4A</color>
+
+    <color name="series_f1">#E10600</color>
+    <color name="series_f2">#0090D0</color>
+    <color name="series_f3">#E56A00</color>
+    <color name="series_f1a">#9B59B6</color>
+    <color name="series_psc">#6B6B6B</color>
+
+    <!-- Legacy names remapped so existing references pick up F1 branding -->
+    <color name="fastlane_background">@color/f1_red</color>
+    <color name="card_background">@color/f1_black_elevated</color>
 </resources>

@@ -1,16 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="AppTheme" parent="@style/Theme.Leanback" />
+    <style name="AppTheme" parent="@style/Theme.Leanback">
+        <item name="android:windowBackground">@color/f1_black</item>
+        <item name="android:colorBackground">@color/f1_black</item>
+        <item name="defaultBrandColor">@color/f1_red</item>
+        <item name="defaultBrandColorDark">@color/f1_red_dim</item>
+        <item name="defaultSearchColor">@color/f1_red</item>
+        <item name="playbackProgressPrimaryColor">@color/f1_red</item>
+        <item name="android:textColorPrimary">@color/f1_white</item>
+        <item name="android:textColorSecondary">@color/f1_silver</item>
+    </style>
 
     <style name="PlaybackTheme" parent="@style/Theme.Leanback">
         <item name="android:windowNoTitle">true</item>
         <item name="android:windowActionBar">false</item>
         <item name="android:windowFullscreen">true</item>
-        <item name="android:windowBackground">@android:color/black</item>
-        <item name="android:colorBackground">@android:color/black</item>
+        <item name="android:windowBackground">@color/f1_black_deep</item>
+        <item name="android:colorBackground">@color/f1_black_deep</item>
         <item name="android:backgroundDimEnabled">false</item>
         <item name="android:windowContentTransitions">false</item>
         <item name="android:windowDisablePreview">true</item>
         <item name="android:forceDarkAllowed">false</item>
+        <item name="defaultBrandColor">@color/f1_red</item>
+        <item name="playbackProgressPrimaryColor">@color/f1_red</item>
     </style>
 
     <style name="TextCardStyle" parent="Widget.Leanback.BaseCardViewStyle">

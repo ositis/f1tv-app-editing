@@ -12,11 +12,17 @@ import android.util.Log
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.WindowManager
+import android.view.View
+import android.view.ViewGroup
+import android.widget.LinearLayout
+import android.widget.Toast
 import androidx.annotation.StringRes
 import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.FragmentActivity
 import androidx.fragment.app.commit
 import androidx.lifecycle.lifecycleScope
+import androidx.media3.datasource.HttpDataSource
+import androidx.media3.exoplayer.ExoPlayer
 import dagger.hilt.android.AndroidEntryPoint
 import fr.groggy.racecontrol.tv.R
 import fr.groggy.racecontrol.tv.core.ViewingService
@@ -25,6 +31,7 @@ import fr.groggy.racecontrol.tv.core.settings.SettingsRepository
 import fr.groggy.racecontrol.tv.f1tv.F1TvBasicChannel
 import fr.groggy.racecontrol.tv.f1tv.F1TvBasicChannelType
 import fr.groggy.racecontrol.tv.f1tv.F1TvClient
+import fr.groggy.racecontrol.tv.f1tv.F1TvOnboardChannel
 import fr.groggy.racecontrol.tv.f1tv.F1TvViewing
 import fr.groggy.racecontrol.tv.ui.channel.playback.protectedhdr.ProtectedHdrRendererRouter
 import fr.groggy.racecontrol.tv.ui.channel.playback.protectedhdr.ProtectedHdrStreamClassifier
@@ -42,11 +49,15 @@ class ChannelPlaybackActivity : FragmentActivity(R.layout.activity_channel_playb
     @Inject internal lateinit var viewingService: ViewingService
     @Inject internal lateinit var settingsRepository: SettingsRepository
     @Inject internal lateinit var f1TvClient: F1TvClient
+    @Inject internal lateinit var httpDataSourceFactory: HttpDataSource.Factory
 
     /** The [F1TvViewing] currently loaded into the player, used for 4K fallback detection. */
     private var currentViewing: F1TvViewing? = null
     private var currentAttemptUsesProtectedHlgGraph: Boolean = false
     private var retriedDirectMedia3HdrSurface: Boolean = false
+    private var multiCamController: MultiCamController? = null
+    private var cachedObcChannels: List<F1TvOnboardChannel> = emptyList()
+    private var multiCamProbed = false
 
     private val playbackTouchGestureDetector by lazy(LazyThreadSafetyMode.NONE) {
         GestureDetector(
@@ -95,9 +106,99 @@ class ChannelPlaybackActivity : FragmentActivity(R.layout.activity_channel_playb
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val column = findViewById<LinearLayout>(R.id.multi_cam_column)
+        multiCamController = MultiCamController(
+            context = this,
+            sideColumn = column,
+            viewingService = viewingService,
+            httpDataSourceFactory = httpDataSourceFactory,
+            scope = lifecycleScope
+        )
         lifecycleScope.launch {
             attachViewingIfNeeded(Settings.StreamType.HLS, preferHdrManifest = preferHdrManifestForDevice)
+            probeMultiCamAvailability()
         }
+    }
+
+    override fun onDestroy() {
+        multiCamController?.stop()
+        multiCamController = null
+        setMultiCamColumnExpanded(false)
+        super.onDestroy()
+    }
+
+    fun isMultiCamAvailable(): Boolean = multiCamProbed && cachedObcChannels.isNotEmpty()
+
+    fun isMultiCamActive(): Boolean = multiCamController?.isActive == true
+
+    fun stopMultiCamSilent() {
+        multiCamController?.stop()
+        setMultiCamColumnExpanded(false)
+    }
+
+    fun toggleMultiCam(mainPlayer: ExoPlayer?) {
+        val controller = multiCamController ?: return
+        if (controller.isActive) {
+            stopMultiCamSilent()
+            Toast.makeText(this, R.string.player_multicam_disabled, Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (!isMultiCamAvailable() || mainPlayer == null) {
+            Toast.makeText(this, R.string.player_multicam_unavailable, Toast.LENGTH_SHORT).show()
+            return
+        }
+        setMultiCamColumnExpanded(true)
+        controller.start(
+            main = mainPlayer,
+            candidates = cachedObcChannels,
+            streamType = Settings.StreamType.HLS
+        ) { count ->
+            if (count <= 0) {
+                setMultiCamColumnExpanded(false)
+                Toast.makeText(this, R.string.player_multicam_unavailable, Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(
+                    this,
+                    getString(R.string.player_multicam_enabled, count),
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
+
+    fun notifyMultiCamMainPaused() {
+        multiCamController?.onMainPaused()
+    }
+
+    fun notifyMultiCamMainResumed() {
+        multiCamController?.onMainResumed()
+    }
+
+    private fun setMultiCamColumnExpanded(expanded: Boolean) {
+        val column = findViewById<LinearLayout>(R.id.multi_cam_column) ?: return
+        val lp = column.layoutParams as LinearLayout.LayoutParams
+        if (expanded) {
+            lp.width = 0
+            lp.weight = 0.28f
+            column.visibility = View.VISIBLE
+        } else {
+            lp.width = 0
+            lp.weight = 0f
+            column.visibility = View.GONE
+        }
+        column.layoutParams = lp
+        val mainPane = findViewById<ViewGroup>(R.id.main_playback_pane)
+        val mainLp = mainPane.layoutParams as LinearLayout.LayoutParams
+        mainLp.weight = if (expanded) 0.72f else 1f
+        mainPane.layoutParams = mainLp
+    }
+
+    private suspend fun probeMultiCamAvailability() {
+        val contentId = ChannelPlaybackFragment.findContentId(this) ?: return
+        val channels = runCatching { f1TvClient.getChannels(contentId) }.getOrElse { emptyList() }
+        cachedObcChannels = channels.filterIsInstance<F1TvOnboardChannel>()
+        multiCamProbed = true
+        Log.i(TAG, "Multi-cam probe: ${cachedObcChannels.size} OBC channels")
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -129,6 +230,43 @@ class ChannelPlaybackActivity : FragmentActivity(R.layout.activity_channel_playb
             )
         )
         finish()
+    }
+
+    /**
+     * Switch to the official Tracker feed (race map / timing tower video).
+     */
+    fun switchToRaceMap() {
+        val sessionId = ChannelPlaybackFragment.findSessionId(this) ?: return
+        val contentId = ChannelPlaybackFragment.findContentId(this) ?: return
+        lifecycleScope.launch {
+            val tracker = runCatching {
+                f1TvClient.getChannels(contentId)
+                    .filterIsInstance<F1TvBasicChannel>()
+                    .firstOrNull { it.type == F1TvBasicChannelType.Tracker }
+            }.getOrNull()
+            if (tracker?.channelId == null) {
+                Toast.makeText(
+                    this@ChannelPlaybackActivity,
+                    R.string.player_map_unavailable,
+                    Toast.LENGTH_SHORT
+                ).show()
+                return@launch
+            }
+            if (tracker.channelId == ChannelPlaybackFragment.findChannelId(this@ChannelPlaybackActivity)) {
+                return@launch
+            }
+            startActivity(
+                intent(
+                    this@ChannelPlaybackActivity,
+                    sessionId,
+                    tracker.channelId,
+                    tracker.contentId,
+                    ChannelPlaybackFragment.findIsLiveSession(this@ChannelPlaybackActivity),
+                    ChannelPlaybackFragment.findSeasonYear(this@ChannelPlaybackActivity)
+                )
+            )
+            finish()
+        }
     }
 
     private fun allowsUhdPlaybackForSeason(): Boolean {

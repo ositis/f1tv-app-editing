@@ -13,8 +13,8 @@ rootProject.file(".env").takeIf { it.exists() }?.forEachLine { line ->
 val f1BuildUsername = envProps["F1_username"] ?: ""
 val f1BuildPassword = envProps["F1_password"] ?: ""
 val appApplicationId = "com.st14n.f1"
-val appVersionCode = 5
-val appVersionName = "1.0.4"
+val appVersionCode = 7
+val appVersionName = "1.0.6"
 // Token refresh interval: default 6 hours; override in .env for testing (e.g. 300000 = 5 min)
 val tokenRefreshIntervalMs = envProps["TOKEN_REFRESH_INTERVAL_MS"]?.toLongOrNull()
     ?: (6L * 60 * 60 * 1000)

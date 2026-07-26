@@ -13,6 +13,7 @@ data class SessionEntity(
     @ColumnInfo(name = "large_picture_url") val largePictureUrl: String,
     @ColumnInfo(name = "content_id") val contentId: String,
     @ColumnInfo(name = "content_subtype") val contentSubtype: String,
+    @ColumnInfo(name = "series") val series: String = "F1",
     @ColumnInfo(name = "start_time") val startTime: Long,
     @ColumnInfo(name = "end_time") val endTime: Long,
     @ColumnInfo(name = "available") val available: Boolean,

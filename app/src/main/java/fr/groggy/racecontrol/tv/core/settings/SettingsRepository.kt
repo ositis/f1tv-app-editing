@@ -78,7 +78,9 @@ class SettingsRepository(
                     Settings.DEFAULT.restrictCustomRadioToLiveSessions
                 ),
                 f1Username = getString(Settings.KEY_F1_USERNAME, "") ?: "",
-                f1Password = getString(Settings.KEY_F1_PASSWORD, "") ?: ""
+                f1Password = getString(Settings.KEY_F1_PASSWORD, "") ?: "",
+                defaultSeries = getString(Settings.KEY_DEFAULT_SERIES, Settings.DEFAULT.defaultSeries)
+                    ?: Settings.DEFAULT.defaultSeries
             )
         }
     }

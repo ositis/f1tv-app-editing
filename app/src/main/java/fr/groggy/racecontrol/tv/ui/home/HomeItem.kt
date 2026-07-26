@@ -3,7 +3,11 @@ package fr.groggy.racecontrol.tv.ui.home
 import androidx.leanback.widget.DiffCallback
 
 enum class HomeItemType {
-    ARCHIVE, ARCHIVE_ALL
+    ARCHIVE,
+    ARCHIVE_ALL,
+    RACE_CALENDAR,
+    STANDINGS,
+    RESULTS
 }
 
 data class HomeItem(

@@ -47,6 +47,15 @@
         <activity android:name=".ui.season.archive.SeasonArchiveActivity"/>
         <activity android:name=".ui.home.HomeActivity"/>
         <activity android:name=".ui.settings.SettingsActivity"/>
+        <activity
+            android:name=".ui.info.RaceCalendarActivity"
+            android:screenOrientation="landscape" />
+        <activity
+            android:name=".ui.info.StandingsActivity"
+            android:screenOrientation="landscape" />
+        <activity
+            android:name=".ui.info.ResultsBrowserActivity"
+            android:screenOrientation="landscape" />
 
     </application>
 

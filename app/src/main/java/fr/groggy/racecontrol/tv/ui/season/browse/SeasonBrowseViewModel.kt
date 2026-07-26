@@ -8,6 +8,7 @@ import fr.groggy.racecontrol.tv.f1tv.Archive
 import fr.groggy.racecontrol.tv.f1tv.F1TvChannelId
 import fr.groggy.racecontrol.tv.f1tv.F1TvEventId
 import fr.groggy.racecontrol.tv.f1tv.F1TvSessionId
+import fr.groggy.racecontrol.tv.f1tv.RacingSeries
 import fr.groggy.racecontrol.tv.ui.DataClassByIdDiffCallback
 import fr.groggy.racecontrol.tv.ui.session.SessionCard
 import kotlinx.coroutines.flow.Flow
@@ -49,6 +50,7 @@ data class Session(
     val contentId: String,
     override val name: String,
     override val contentSubtype: String,
+    override val series: RacingSeries,
     override val thumbnail: Image?,
     val largePictureUrl:String,
     val channels: List<F1TvChannelId>

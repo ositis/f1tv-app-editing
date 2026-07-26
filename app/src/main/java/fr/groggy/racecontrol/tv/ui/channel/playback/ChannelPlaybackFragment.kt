@@ -328,6 +328,7 @@ class ChannelPlaybackFragment : VideoSupportFragment(), Player.Listener {
 
     private fun releasePlayerSafely(source: String) {
         cancelStartupBufferingWatchdog()
+        (activity as? ChannelPlaybackActivity)?.stopMultiCamSilent()
         val playerToRelease = _player ?: run {
             Log.i(TAG, "releasePlayerSafely skipped; player already null source=$source")
             return
@@ -946,7 +947,8 @@ class ChannelPlaybackFragment : VideoSupportFragment(), Player.Listener {
             activePlayer.pause()
         }
         customRadioPlayer?.pause()
-        Log.d(TAG, "$logSource: paused main player and custom radio")
+        (activity as? ChannelPlaybackActivity)?.notifyMultiCamMainPaused()
+        Log.d(TAG, "$logSource: paused main player, custom radio, multi-cam")
     }
 
     private fun resumePlaybackFromTransportControls(logSource: String = "transport") {
@@ -957,7 +959,14 @@ class ChannelPlaybackFragment : VideoSupportFragment(), Player.Listener {
         if (customRadioMuted || customRadioInjected) {
             customRadioPlayer?.play()
         }
-        Log.d(TAG, "$logSource: resumed main player and custom radio")
+        (activity as? ChannelPlaybackActivity)?.notifyMultiCamMainResumed()
+        Log.d(TAG, "$logSource: resumed main player, custom radio, multi-cam")
+    }
+
+    internal fun exoPlayerOrNull(): ExoPlayer? = _player
+
+    internal fun toggleMultiCamFromTransport() {
+        (activity as? ChannelPlaybackActivity)?.toggleMultiCam(_player)
     }
 
     // ── Grand Prix Radio ──────────────────────────────────────────────────────

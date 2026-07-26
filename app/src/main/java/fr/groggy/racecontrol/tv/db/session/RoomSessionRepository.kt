@@ -39,6 +39,9 @@ class RoomSessionRepository @Inject constructor(
             largePictureUrl = session.largePictureUrl,
             contentId = session.contentId,
             contentSubtype = session.contentSubtype,
+            series = RacingSeries.entries
+                .firstOrNull { it != RacingSeries.ALL && it.preferenceValue == session.series }
+                ?: RacingSeries.classify(null, session.series, session.name),
             period = InstantPeriod(
                 start = Instant.ofEpochMilli(session.startTime),
                 end = Instant.ofEpochMilli(session.endTime)
@@ -67,6 +70,7 @@ class RoomSessionRepository @Inject constructor(
             pictureUrl = session.pictureUrl,
             largePictureUrl = session.largePictureUrl,
             contentSubtype = session.contentSubtype,
+            series = session.series.preferenceValue,
             startTime = session.period.start.toEpochMilli(),
             endTime = session.period.end.toEpochMilli(),
             available = session.available,

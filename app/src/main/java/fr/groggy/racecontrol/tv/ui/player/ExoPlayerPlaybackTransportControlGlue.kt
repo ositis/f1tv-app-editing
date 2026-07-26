@@ -24,6 +24,7 @@ import androidx.media3.ui.leanback.LeanbackPlayerAdapter
 import fr.groggy.racecontrol.tv.R
 import fr.groggy.racecontrol.tv.ui.channel.playback.ChannelPlaybackActivity
 import fr.groggy.racecontrol.tv.ui.channel.playback.ChannelPlaybackFragment
+import android.widget.Toast
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -77,6 +78,18 @@ class ExoPlayerPlaybackTransportControlGlue(
     private val switchChannelAction = Action(
         Action.NO_ID,
         activity.getString(R.string.channel_selection_switch_channel),
+        null,
+        ContextCompat.getDrawable(context, R.drawable.ic_switch_channel)
+    )
+    private val raceMapAction = Action(
+        Action.NO_ID,
+        activity.getString(R.string.player_map_action),
+        null,
+        ContextCompat.getDrawable(context, R.drawable.ic_video_settings)
+    )
+    private val multiCamAction = Action(
+        Action.NO_ID,
+        activity.getString(R.string.player_multicam_action),
         null,
         ContextCompat.getDrawable(context, R.drawable.ic_switch_channel)
     )
@@ -143,6 +156,8 @@ class ExoPlayerPlaybackTransportControlGlue(
             add(selectAudioAction)
             add(customRadioSyncAction)
             add(switchChannelAction)
+            add(raceMapAction)
+            add(multiCamAction)
             add(resolutionSelectionAction)
             add(closedCaptionAction)
         }
@@ -304,6 +319,21 @@ class ExoPlayerPlaybackTransportControlGlue(
             closedCaptionAction -> toggleClosedCaptions()
             resolutionSelectionAction -> openMenuOnce { openResolutionSelectionDialog() }
             switchChannelAction -> openMenuOnce { openChannelSwitchDialog() }
+            raceMapAction -> openMenuOnce {
+                (activity as? ChannelPlaybackActivity)?.switchToRaceMap()
+                onMenuDismissed()
+            }
+            multiCamAction -> {
+                val host = activity as? ChannelPlaybackActivity
+                if (host?.isMultiCamAvailable() != true && host?.isMultiCamActive() != true) {
+                    Toast.makeText(activity, R.string.player_multicam_unavailable, Toast.LENGTH_SHORT).show()
+                } else {
+                    activity.supportFragmentManager.fragments
+                        .filterIsInstance<ChannelPlaybackFragment>()
+                        .firstOrNull()
+                        ?.toggleMultiCamFromTransport()
+                }
+            }
             else -> super.onActionClicked(action)
         }
     }
