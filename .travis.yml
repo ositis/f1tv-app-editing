@@ -1,0 +1,55 @@
+language: java
+dist: bionic
+jdk: openjdk8
+
+cache:
+  directories:
+    # Android SDK
+    - $HOME/android-cmdline-tools
+    - $HOME/android-sdk
+
+    # Gradle dependencies
+    - $HOME/.gradle/caches/
+    - $HOME/.gradle/wrapper/
+
+    # Android build cache (see http://tools.android.com/tech-docs/build-cache)
+    - $HOME/.android/build-cache
+
+install:
+  # Download and unzip the Android command line tools (if not already there thanks to the cache mechanism)
+  # Latest version of this file available here: https://developer.android.com/studio/#command-tools
+  - if test ! -e $HOME/android-cmdline-tools/cmdline-tools.zip ; then curl https://dl.google.com/android/repository/commandlinetools-linux-6609375_latest.zip > $HOME/android-cmdline-tools/cmdline-tools.zip ; fi
+  - unzip -qq -n $HOME/android-cmdline-tools/cmdline-tools.zip -d $HOME/android-cmdline-tools
+
+  # Install or update Android SDK components (will not do anything if already up to date thanks to the cache mechanism)
+  - echo y | $HOME/android-cmdline-tools/tools/bin/sdkmanager --sdk_root=$HOME/android-sdk 'platform-tools' > /dev/null
+  # Latest version of build-tools available here: https://developer.android.com/studio/releases/build-tools.html
+  - echo y | $HOME/android-cmdline-tools/tools/bin/sdkmanager --sdk_root=$HOME/android-sdk 'build-tools;30.0.2' > /dev/null
+  - echo y | $HOME/android-cmdline-tools/tools/bin/sdkmanager --sdk_root=$HOME/android-sdk 'platforms;android-30' > /dev/null
+
+env:
+  - ANDROID_HOME=$HOME/android-sdk
+
+script:
+  - ./gradlew --no-daemon clean assembleDebug
+
+before_cache:
+  # Do not cache a few Gradle files/directories (see https://docs.travis-ci.com/user/languages/java/#Caching)
+  - rm -f  $HOME/.gradle/caches/modules-2/modules-2.lock
+  - rm -fr $HOME/.gradle/caches/*/plugin-resolution/
+
+before_deploy:
+  - openssl aes-256-cbc -K $encrypted_d7c41a9780bb_key -iv $encrypted_d7c41a9780bb_iv -in release-key.p12.enc -out release-key.p12 -d
+  - ./gradlew --no-daemon assembleRelease -Psigning.key.store.path=../release-key.p12 -Psigning.key.alias=release -Psigning.key.password="$SIGNING_KEY_PASSWORD"
+  - mv app/build/outputs/apk/release/app-release.apk race-control-tv-$TRAVIS_TAG.apk
+
+deploy:
+  provider: releases
+  api_key:
+    secure: mNWs63cc/1cEUFVuvgizi99+bTGNIdDtg8VPJGfxKAfQftyucmhl+jIga+cdk/+iZa1Xxu0PJ78TX2l+wtEYgNy3xuNpx1BNld2FcDQqUOyiJYRZdN7eIO+yKMo5ERKvqPZcFTUF/d6RorhWAdAJJGrcVnWhAPJ62juZAY1LOrHBQKTQo6O02GX6BlP8gDvG3UcIOMQ8gfByck3AWh/K1ixnITqIln0tdabiZStCF5779xC6pK4FOoaTlFlEXtraH3DrQayyA6HF22RaFEobdYUu6H5jZLEppIJWUmUoF5dW+Az5JcBPLC3VJrr/5rFSrnPFYW7sUiMV2IEOD2nLnH9GwHddFcnGk8JRcku/QVGy5qAZJi/poANNeaMwXjE91ucDZgrImYsnykSCcuSFSu0IiEpLgL4ycGRx9CS0MdYGA0e3Pdv/WXnj0xeqZ4e6hGHsj04alBjEjxdWbQVYWHmAR5BIQyC1p78C6aCJkWGDdJCj2UpZ43cJBC3RFaVFd3mGgsg6Kt1EkGaSPOItzlcUTV593vT11Ortoj3u7wS+O1zm+cFJo7HBpn3Q2z16GwuNDXKlE2CdClb8K/HvpQBVvfstoYLwDdaYa9HAWKjxM5PxJDg/HsGPbXJJp7CuXILamzkQSUtQz4ZYEdvyO4EK+xgGf7HsHMKTdaeWZjs=
+  draft: true
+  file: race-control-tv-$TRAVIS_TAG.apk
+  on:
+    repo: Groggy/race-control-tv
+    tags: true
+  skip_cleanup: 'true'

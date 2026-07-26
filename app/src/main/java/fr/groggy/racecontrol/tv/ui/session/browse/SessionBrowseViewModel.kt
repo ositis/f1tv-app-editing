@@ -1,0 +1,152 @@
+package fr.groggy.racecontrol.tv.ui.session.browse
+
+import android.net.Uri
+import android.util.Log
+import androidx.lifecycle.ViewModel
+import dagger.hilt.android.lifecycle.HiltViewModel
+import fr.groggy.racecontrol.tv.core.channel.ChannelRepository
+import fr.groggy.racecontrol.tv.core.session.SessionRepository
+import fr.groggy.racecontrol.tv.core.session.SessionService
+import fr.groggy.racecontrol.tv.f1tv.*
+import fr.groggy.racecontrol.tv.ui.DataClassByIdDiffCallback
+import fr.groggy.racecontrol.tv.ui.channel.BasicChannelCard
+import fr.groggy.racecontrol.tv.ui.channel.OnboardChannelCard
+import fr.groggy.racecontrol.tv.utils.coroutines.traverse
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.withContext
+import org.threeten.bp.Instant
+import javax.inject.Inject
+
+@HiltViewModel
+class SessionBrowseViewModel @Inject constructor(
+    private val channelRepository: ChannelRepository,
+    private val sessionRepository: SessionRepository,
+    private val sessionService: SessionService
+) : ViewModel() {
+
+    companion object {
+        private val TAG = SessionBrowseViewModel::class.simpleName
+    }
+
+    suspend fun sessionLoaded(sessionId: String, contentId: String): Session = withContext(Dispatchers.IO) {
+        sessionService.loadChannels(contentId)
+        return@withContext session(sessionId, contentId).first()
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    fun session(sessionId: String, contentId: String): Flow<Session> {
+        return sessionRepository.observeById(sessionId)
+            .onEach { Log.d(TAG, "Session changed") }
+            .flatMapLatest { session ->
+                val channelList = channels(contentId).first()
+                val isLiveSession = session.isLiveNow()
+                Log.d(TAG, "Loaded channel count ${channelList.size}")
+
+                if (channelList.isEmpty()) {
+                    flowOf(
+                        SingleChannelSession(
+                            contentId = session.contentId,
+                            channel = channelList.firstOrNull()?.id,
+                            isLiveSession = isLiveSession
+                        )
+                    )
+                } else {
+                    flowOf(
+                        MultiChannelsSession(
+                            contentId = session.contentId,
+                            name = session.name,
+                            channels = channelList,
+                            isLiveSession = isLiveSession
+                        )
+                    )
+                }
+            }
+            .distinctUntilChanged()
+            .onEach { Log.d(TAG, "VM session changed") }
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private fun channels(contentId: String): Flow<List<Channel>> {
+        return channelRepository.observe(contentId)
+            .onEach { Log.d(TAG, "Channels changed") }
+            .flatMapLatest { channels -> channels.traverse { channel -> when (channel) {
+                is F1TvBasicChannel -> flowOf(BasicChannel(
+                    id = channel.channelId?.let(::F1TvChannelId),
+                    contentId = channel.contentId,
+                    type = channel.type
+                ))
+                is F1TvOnboardChannel -> flowOf(OnboardChannel(
+                    id = F1TvChannelId(channel.channelId),
+                    contentId = channel.contentId,
+                    name = channel.name,
+                    background = channel.background,
+                    subTitle = channel.subTitle,
+                    driver = null
+                ))
+                } }
+            }
+            .distinctUntilChanged()
+            .onEach { Log.d(TAG, "VM channels changed") }
+    }
+}
+
+private fun F1TvSession.isLiveNow(now: Instant = Instant.now()): Boolean {
+    return !period.start.isAfter(now) && !period.end.isBefore(now)
+}
+
+sealed class Session {
+    abstract val contentId: String
+    abstract val isLiveSession: Boolean
+}
+
+data class SingleChannelSession(
+    override val contentId: String,
+    val channel: F1TvChannelId?,
+    override val isLiveSession: Boolean
+) : Session()
+
+data class MultiChannelsSession(
+    override val contentId: String,
+    val name: String,
+    val channels: List<Channel>,
+    override val isLiveSession: Boolean
+) : Session()
+
+sealed class Channel {
+
+    companion object {
+        val diffCallback = DataClassByIdDiffCallback { channel: Channel -> channel.id }
+    }
+
+    abstract val id: F1TvChannelId?
+    abstract val contentId: String
+
+}
+
+data class BasicChannel(
+    override val id: F1TvChannelId?,
+    override val contentId: String,
+    override val type: F1TvBasicChannelType
+) : Channel(), BasicChannelCard
+
+data class OnboardChannel(
+    override val id: F1TvChannelId,
+    override val contentId: String,
+    override val name: String,
+    override val background: String?,
+    override val subTitle: String?,
+    override val driver: Driver?
+) : Channel(), OnboardChannelCard
+
+data class Driver(
+    val id: F1TvDriverId,
+    override val racingNumber: Int,
+    override val headshot: Image?
+) : OnboardChannelCard.Driver
+
+data class Image(
+    val id: F1TvImageId,
+    override val url: Uri
+) : OnboardChannelCard.Image

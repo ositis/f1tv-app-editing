@@ -1,0 +1,50 @@
+# Built application files
+*.apk
+*.ap_
+
+# Files for the dex VM
+*.dex
+
+# Java class files
+*.class
+
+# Generated files
+bin/
+gen/
+
+# local configuration file (sdk path, etc)
+local.properties
+
+# OSX files
+.DS_Store
+
+# Android Studio
+*.iml
+.idea
+.gradle
+build/
+.navigation
+captures/
+output.json
+
+# Sensitive data
+*.jks
+*.pem
+.env
+
+# tmp & jadx folders
+tmp/
+jadx/
+official_jadx/
+unpacked_jadx/
+jadx_full/
+jadx_unpacked/
+analysis/
+
+# Archives
+*.zip
+# *.json
+*.txt
+*.jar
+*.mp4
+*.m3u8

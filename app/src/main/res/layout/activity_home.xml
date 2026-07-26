@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <ImageView
+        android:id="@+id/settings"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="end"
+        android:focusable="true"
+        android:clickable="true"
+        android:src="@drawable/ic_settings"
+        android:background="@drawable/icon_select_background"
+        android:contentDescription="@string/settings_content_description"
+        android:layout_margin="8dp"/>
+
+    <RelativeLayout
+        android:id="@+id/teaserContainer"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content">
+
+        <ImageView
+            android:id="@+id/teaserImage"
+            android:layout_width="wrap_content"
+            android:layout_height="180dp"
+            android:layout_margin="20dp"
+            android:clickable="true"
+            android:contentDescription="@string/teaser_image_description"
+            android:focusable="true"
+            android:scaleType="centerCrop"
+            android:cropToPadding="true"
+            android:padding="2dp"
+            android:background="@drawable/teaser_item_background"
+            android:src="@drawable/current_season" />
+
+        <TextView
+            android:id="@+id/teaserImageText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignEnd="@id/teaserImage"
+            android:layout_alignRight="@id/teaserImage"
+            android:layout_alignTop="@id/teaserImage"
+            android:layout_marginEnd="32dp"
+            android:layout_marginTop="4dp"
+            android:textColor="@android:color/white"
+            android:textAlignment="center"
+            android:textSize="36sp" />
+    </RelativeLayout>
+
+    <androidx.fragment.app.FragmentContainerView
+        android:id="@+id/fragment_container"
+        android:name="fr.groggy.racecontrol.tv.ui.LoadingFragment"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+</LinearLayout>

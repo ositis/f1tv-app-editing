@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="login">Email address</string>
+    <string name="password">Password</string>
+    <string name="signin">Sign in</string>
+    <string name="signin_required_f1_tv_pro_account">A F1Tv/F1TvPro account is required to login</string>
+    <string name="invalid_credentials">Credentials invalid</string>
+    <string name="rejected_credentials">Wrong email or password</string>
+    <string name="rejected_credentials_message">
+        Sometimes this might happen even if your login and password are correct due a <b>F1 API BUG</b>.\n\n
+        1. If that is the case a possible workaround is to <b>go to F1TV website on your computer</b>,
+        then login on your account and logout then come
+        back to the app and it will eventually work.\n
+        2. It is also possible that for some reason your IP is blocked (401 response) in this case try
+        to switch networks it might also work. In this case you have to reach F1 support as well.
+    </string>
+
+    <string name="unable_to_play_video_session_expired">Your session is expired, please login again</string>
+    <string name="unable_to_play_video_message">Something went wrong while trying to play this video</string>
+    <string name="audio_selection_dialog_title">Audio</string>
+    <string name="video_selection_dialog_title">Video</string>
+    <string name="video_selection_quality_auto">Auto</string>
+    <string name="unable_to_open_with_external_player">No supported external player detected, please install a supported player such as VLC and try again, or disable the open with external player feature</string>
+    <string name="watching_on_external_player">You are watching the content with an external player</string>
+
+    <string name="choose_a_season">Select a season</string>
+
+    <string name="teaser_image_text">Current season: %1$d</string>
+    <string name="teaser_image_description">Current season</string>
+
+    <string name="home_all">Show all</string>
+    <string name="home_archive">Archive</string>
+
+    <string name="settings_content_description">Settings</string>
+    <string name="settings_category_player_title">Player</string>
+    <string name="settings_stream_type_title">Select the stream format (beta)</string>
+    <string name="settings_bypass_channel_selection_title">Bypass channel selection</string>
+    <string name="settings_bypass_channel_selection_summary">If ON after select a event you will be immediately redirected to the player in the general broadcast</string>
+    <string name="settings_display_thumbnails_enabled_title">Display Thumbnails</string>
+    <string name="settings_display_thumbnails_enabled_summary">Thumbnails may contain spoilers. Turning this OFF will disable thumbnail images</string>
+    <string name="settings_disable_uhd_manifests_title">Disable UHD (4K) manifests</string>
+    <string name="settings_disable_uhd_manifests_summary">Force 1080p SDR playback and skip UHD/HDR manifests, even on devices that can play or tone-map the 4K HDR stream.</string>
+    <string name="settings_disable_hdr_on_4k_streams_title">Disable HDR on 4K streams (SDR Tone Mapping)</string>
+    <string name="settings_disable_hdr_on_4k_streams_summary">If you experience a green screen on 4K streams, enable this to convert HDR video to SDR while keeping 4K resolution.</string>
+    <string name="settings_open_with_external_player_title">Open with external player (beta)</string>
+    <string name="settings_reset_to_default_title">Reset settings to default</string>
+    <string name="settings_open_with_external_player_summary">If ON we will use an external player to play content instead the built in player</string>
+    <string name="settings_use_external_audio_title">External audio (PRES channel)</string>
+    <string name="settings_use_external_audio_summary">Mix international commentary audio with the current stream (requires restart)</string>
+    <string name="settings_audio_offset_ms_title">Audio sync offset</string>
+    <string name="custom_radio_audio_label">Custom Radio</string>
+    <string name="custom_radio_overlay_label">%1$s / %2$s seconds delayed</string>
+    <string name="custom_radio_sync_action">Radio sync</string>
+    <string name="custom_radio_sync_title">Radio sync [%1$s delayed]</string>
+    <string name="custom_radio_sync_decrease">0.5s forwards</string>
+    <string name="custom_radio_sync_increase">0.5s backwards</string>
+    <string name="audio_selection_close">Close</string>
+    <string name="custom_radio_sync_close">Close</string>
+    <string name="custom_radio_waiting_message">Waiting %1$s seconds for synchronization.</string>
+    <string name="custom_radio_live_only_message">Custom radio is restricted to live sessions.</string>
+    <string name="settings_category_other_title">Other</string>
+    <string name="settings_donations_title">Donations</string>
+    <string name="settings_donations_summary">Support the project!</string>
+    <string name="settings_logout_title">Logout</string>
+    <string name="donations_explanation_summary">Scan the QR code bellow with your phone to support the project</string>
+
+    <string name="channel_selection_switch_channel">Switch channel</string>
+
+    <string name="reauth_message">Re-authenticating…</string>
+
+    <string name="settings_category_account_title">Account</string>
+    <string name="settings_current_account_title">Current account</string>
+    <string name="settings_current_account_saved_summary">Saved for sign-in: %1$s</string>
+    <string name="settings_current_account_none_summary">Not signed in</string>
+    <string name="settings_f1_username_title">F1TV email address</string>
+    <string name="settings_f1_password_title">F1TV password</string>
+    <string name="signin_setup_title">Sign in setup</string>
+    <string name="signin_setup_message">Enter your F1TV email and password once and the app will fill the web login for you. You can also paste a custom radio URL.</string>
+    <string name="signin_setup_email_hint">F1TV email</string>
+    <string name="signin_setup_password_hint">F1TV password</string>
+    <string name="signin_setup_audio_url_hint">Custom radio URL (optional)</string>
+    <string name="signin_setup_confirm">Save and sign in</string>
+    <string name="signin_setup_skip">Skip</string>
+    <string name="signin_setup_credentials_validation">Enter both email and password, or leave both empty.</string>
+    <string name="settings_custom_radio_delay_title">Radio sync delay</string>
+    <string name="settings_custom_radio_url_title">Custom Radio URL</string>
+    <string name="settings_custom_radio_url_summary">Leave blank to use the default streams</string>
+    <string name="settings_auto_select_custom_radio_title">Prefer custom radio when available</string>
+    <string name="settings_auto_select_custom_radio_summary">Automatically replace F1 audio with the built-in or saved custom radio stream when one is available.</string>
+    <string name="settings_restrict_custom_radio_to_live_sessions_title">Use custom radio for live sessions only</string>
+    <string name="settings_restrict_custom_radio_to_live_sessions_summary">Prevent custom radio from being selected automatically or manually for VOD and replay sessions.</string>
+    <string name="settings_app_locale_title">App language</string>
+</resources>

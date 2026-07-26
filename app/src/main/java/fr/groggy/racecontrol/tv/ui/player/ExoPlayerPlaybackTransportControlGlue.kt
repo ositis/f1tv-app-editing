@@ -1,0 +1,562 @@
+package fr.groggy.racecontrol.tv.ui.player
+
+import android.content.pm.PackageManager
+import android.util.Log
+import android.os.SystemClock
+import android.view.View
+import android.view.ViewGroup
+import android.widget.TextView
+import androidx.core.content.ContextCompat
+import androidx.fragment.app.FragmentActivity
+import androidx.leanback.media.PlaybackBaseControlGlue
+import androidx.leanback.media.PlaybackTransportControlGlue
+import androidx.leanback.widget.*
+import androidx.media3.common.C
+import androidx.media3.common.Format
+import androidx.media3.common.Player
+import androidx.media3.common.Tracks
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.analytics.AnalyticsListener
+import androidx.media3.exoplayer.source.MediaLoadData
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
+import androidx.media3.exoplayer.util.EventLogger
+import androidx.media3.ui.leanback.LeanbackPlayerAdapter
+import fr.groggy.racecontrol.tv.R
+import fr.groggy.racecontrol.tv.ui.channel.playback.ChannelPlaybackActivity
+import fr.groggy.racecontrol.tv.ui.channel.playback.ChannelPlaybackFragment
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.roundToInt
+
+class ExoPlayerPlaybackTransportControlGlue(
+    private val activity: FragmentActivity,
+    private val exoPlayer: ExoPlayer,
+    private val trackSelector: DefaultTrackSelector,
+    private val onCustomRadioRequested: (() -> Unit)? = null,
+    private val onCustomRadioSyncRequested: (() -> Unit)? = null,
+    private val onAudioTrackSelected: (() -> Unit)? = null,
+    private val onPlayRequested: (() -> Unit)? = null,
+    private val onPauseRequested: (() -> Unit)? = null,
+    private val isCustomRadioSelectable: (() -> Boolean)? = null,
+    private val isCustomRadioActive: (() -> Boolean)? = null,
+    private val currentAudioLabelOverride: (() -> String?)? = null,
+    private val onCustomRadioOffsetAdjust: ((Long) -> Unit)? = null,
+    private val onControlsInteraction: (() -> Unit)? = null,
+    private val onPlayerMenuDismissed: (() -> Unit)? = null
+) : PlaybackTransportControlGlue<LeanbackPlayerAdapter>(
+    activity,
+    LeanbackPlayerAdapter(activity, exoPlayer, 1_000)
+), AnalyticsListener {
+
+    private val shouldForceControlFocus: Boolean =
+        !activity.packageManager.hasSystemFeature(PackageManager.FEATURE_TOUCHSCREEN)
+    private val shouldDisableFocusForTouchControls: Boolean =
+        activity.packageManager.hasSystemFeature(PackageManager.FEATURE_TOUCHSCREEN)
+
+    companion object {
+        private val TAG = ExoPlayerPlaybackTransportControlGlue::class.simpleName
+        private const val DEFAULT_SEEK_OFFSET = 15_000L
+        // for some reason, have to divide 500 ms seek by 2 for it to work properly??
+        private const val CUSTOM_RADIO_OVERLAY_OFFSET_STEP_MS = 250L
+    }
+
+    private val rewindAction = PlaybackControlsRow.RewindAction(activity)
+    private val fastFormatAction = PlaybackControlsRow.FastForwardAction(activity)
+    private val selectAudioAction = Action(
+        Action.NO_ID,
+        activity.getString(R.string.audio_selection_dialog_title),
+        null,
+        ContextCompat.getDrawable(context, R.drawable.lb_ic_search_mic_out)
+    )
+    private val customRadioSyncAction = Action(
+        Action.NO_ID,
+        activity.getString(R.string.custom_radio_sync_action),
+        null,
+        ContextCompat.getDrawable(context, R.drawable.ic_settings)
+    )
+    private val switchChannelAction = Action(
+        Action.NO_ID,
+        activity.getString(R.string.channel_selection_switch_channel),
+        null,
+        ContextCompat.getDrawable(context, R.drawable.ic_switch_channel)
+    )
+    private val resolutionSelectionAction = Action(
+        Action.NO_ID,
+        activity.getText(R.string.video_selection_dialog_title),
+        null,
+        ContextCompat.getDrawable(context, R.drawable.ic_video_settings)
+    )
+    private val closedCaptionAction = PlaybackControlsRow.ClosedCaptioningAction(activity)
+
+    private val closedCaptionsTextView: TextView by lazy {
+        activity.findViewById(R.id.closed_captions)
+    }
+
+    private var overlaySubtitleView: TextView? = null
+
+    private var currentVideoFormat: Format? = null
+    private var currentAudioFormat: Format? = null
+    private var lastHandledActionKey: String? = null
+    private var lastHandledActionAtElapsedMs: Long = 0L
+
+    // Guard against the dialog being reopened by the key-up event that leaks back
+    // from the dismissed dialog to the focused transport-row action button.
+    private var menuCurrentlyOpen = false
+
+    private fun openMenuOnce(opener: () -> Unit) {
+        if (menuCurrentlyOpen) return
+        menuCurrentlyOpen = true
+        opener()
+    }
+
+    private fun onMenuDismissed() {
+        menuCurrentlyOpen = false
+        onPlayerMenuDismissed?.invoke()
+    }
+
+    fun notifyMenuDismissed() {
+        onMenuDismissed()
+    }
+
+    init {
+        exoPlayer.addAnalyticsListener(this)
+        isSeekEnabled = true
+        isControlsOverlayAutoHideEnabled = true
+
+        // Cue events moved out of AnalyticsListener in Media3 — handle via Player.Listener
+        exoPlayer.addListener(object : Player.Listener {
+            override fun onCues(cueGroup: androidx.media3.common.text.CueGroup) {
+                if (closedCaptionAction.index == PlaybackControlsRow.ClosedCaptioningAction.INDEX_ON) {
+                    closedCaptionsTextView.text =
+                        cueGroup.cues.joinToString(" ") { it.text ?: "" }
+                }
+            }
+        })
+    }
+
+    override fun onCreatePrimaryActions(adapter: ArrayObjectAdapter) {
+        Log.d(TAG, "onCreatePrimaryActions")
+        adapter.apply {
+            super.onCreatePrimaryActions(this)
+            add(rewindAction)
+            add(fastFormatAction)
+            add(selectAudioAction)
+            add(customRadioSyncAction)
+            add(switchChannelAction)
+            add(resolutionSelectionAction)
+            add(closedCaptionAction)
+        }
+        refreshControlBarActionLabels()
+    }
+
+    override fun onCreateRowPresenter(): PlaybackRowPresenter {
+        val descriptionPresenter = object : AbstractDetailsDescriptionPresenter() {
+            override fun onBindDescription(viewHolder: ViewHolder, item: Any) {
+                val glue = item as PlaybackBaseControlGlue<*>
+                viewHolder.title.text = glue.title
+                viewHolder.subtitle.text = glue.subtitle
+                overlaySubtitleView = viewHolder.subtitle
+            }
+        }
+
+        return object : PlaybackTransportRowPresenter() {
+            override fun onBindRowViewHolder(viewHolder: RowPresenter.ViewHolder, item: Any) {
+                super.onBindRowViewHolder(viewHolder, item)
+                viewHolder.setOnKeyListener(this@ExoPlayerPlaybackTransportControlGlue)
+                maybeFocusPrimaryControlSoon(viewHolder.view)
+                maybeDisableFocusForTouchControls(viewHolder.view)
+            }
+
+            override fun onUnbindRowViewHolder(viewHolder: RowPresenter.ViewHolder) {
+                super.onUnbindRowViewHolder(viewHolder)
+                viewHolder.setOnKeyListener(null)
+            }
+
+            override fun onReappear(viewHolder: RowPresenter.ViewHolder) {
+                super.onReappear(viewHolder)
+                maybeFocusPrimaryControlSoon(viewHolder.view)
+            }
+
+            override fun onRowViewSelected(viewHolder: RowPresenter.ViewHolder, selected: Boolean) {
+                super.onRowViewSelected(viewHolder, selected)
+                if (selected) {
+                    maybeFocusPrimaryControlSoon(viewHolder.view)
+                }
+            }
+        }.apply {
+            setDescriptionPresenter(descriptionPresenter)
+            setOnActionClickedListener { action ->
+                this@ExoPlayerPlaybackTransportControlGlue.onActionClicked(action)
+            }
+        }
+    }
+
+    private fun focusPrimaryControlSoon(root: View) {
+        root.post { focusPrimaryControl(root) }
+        root.postDelayed({ focusPrimaryControl(root) }, 120L)
+    }
+
+    private fun maybeFocusPrimaryControlSoon(root: View) {
+        if (!shouldForceControlFocus) return
+        focusPrimaryControlSoon(root)
+    }
+
+    private fun maybeDisableFocusForTouchControls(root: View) {
+        if (!shouldDisableFocusForTouchControls) return
+        root.post {
+            val controlBar = findVisibleControlBar(root) ?: return@post
+            disableFocusForTouchControls(controlBar)
+        }
+    }
+
+    private fun disableFocusForTouchControls(container: ViewGroup) {
+        container.isFocusable = false
+        container.isFocusableInTouchMode = false
+        for (index in 0 until container.childCount) {
+            val child = container.getChildAt(index)
+            child.isFocusable = false
+            child.isFocusableInTouchMode = false
+            child.setOnTouchListener(null)
+            if (child is ViewGroup) {
+                disableFocusForTouchControls(child)
+            }
+        }
+    }
+
+    override fun play() {
+        Log.d(TAG, "play requested from transport controls")
+        if (onPlayRequested != null) {
+            onPlayRequested.invoke()
+        } else {
+            exoPlayer.play()
+        }
+    }
+
+    override fun pause() {
+        Log.d(TAG, "pause requested from transport controls")
+        if (onPauseRequested != null) {
+            onPauseRequested.invoke()
+        } else {
+            exoPlayer.pause()
+        }
+    }
+
+    private fun focusPrimaryControl(root: View): Boolean {
+        val primaryControls = root.findViewById<ViewGroup>(androidx.leanback.R.id.controls_dock)
+        return focusFirstControlBarAction(primaryControls) || focusFirstControlBarAction(root)
+    }
+
+    private fun focusFirstControlBarAction(container: View?): Boolean {
+        val controlBar = findVisibleControlBar(container) ?: return false
+        if (controlBar.requestFocus(View.FOCUS_DOWN)) return true
+        for (index in 0 until controlBar.childCount) {
+            val child = controlBar.getChildAt(index)
+            if (child.isShown && child.isFocusable && child.requestFocus()) {
+                return true
+            }
+        }
+        return false
+    }
+
+    private fun findVisibleControlBar(view: View?): ViewGroup? {
+        if (view == null || !view.isShown) return null
+        if (view.id == androidx.leanback.R.id.control_bar && view is ViewGroup) return view
+        val group = view as? ViewGroup ?: return null
+        for (index in 0 until group.childCount) {
+            val found = findVisibleControlBar(group.getChildAt(index))
+            if (found != null) return found
+        }
+        return null
+    }
+
+    override fun onActionClicked(action: Action) {
+        val actionKey = action.debounceKey()
+        if (shouldIgnoreRapidDuplicateAction(action, actionKey)) {
+            Log.d(TAG, "Ignoring duplicate action: $actionKey")
+            return
+        }
+        Log.d(TAG, "onActionClicked: ${action.javaClass.simpleName}")
+        onControlsInteraction?.invoke()
+        when (action) {
+            is PlaybackControlsRow.PlayPauseAction -> {
+                if (exoPlayer.isPlaying) {
+                    pause()
+                } else {
+                    play()
+                }
+            }
+            rewindAction -> {
+                if (isCustomRadioActive?.invoke() == true) {
+                    onCustomRadioOffsetAdjust?.invoke(CUSTOM_RADIO_OVERLAY_OFFSET_STEP_MS)
+                } else {
+                    playerAdapter.seekOffset(-DEFAULT_SEEK_OFFSET)
+                }
+            }
+            fastFormatAction -> {
+                if (isCustomRadioActive?.invoke() == true) {
+                    onCustomRadioOffsetAdjust?.invoke(-CUSTOM_RADIO_OVERLAY_OFFSET_STEP_MS)
+                } else {
+                    playerAdapter.seekOffset(DEFAULT_SEEK_OFFSET)
+                }
+            }
+            selectAudioAction -> openMenuOnce { openAudioSelectionDialog() }
+            customRadioSyncAction -> openMenuOnce { onCustomRadioSyncRequested?.invoke() }
+            closedCaptionAction -> toggleClosedCaptions()
+            resolutionSelectionAction -> openMenuOnce { openResolutionSelectionDialog() }
+            switchChannelAction -> openMenuOnce { openChannelSwitchDialog() }
+            else -> super.onActionClicked(action)
+        }
+    }
+
+    private fun openChannelSwitchDialog() {
+        val sessionId = ChannelPlaybackFragment.findSessionId(activity) ?: return
+        val contentId = ChannelPlaybackFragment.findContentId(activity) ?: return
+        activity.window.decorView.post {
+            ChannelSelectionDialog.newInstance(sessionId, contentId)
+                .onDialogDismissed(::onMenuDismissed)
+                .show(activity.supportFragmentManager)
+        }
+    }
+
+    private fun openResolutionSelectionDialog() {
+        activity.window.decorView.post {
+            ResolutionSelectionDialog(
+                tracks = exoPlayer.currentTracks,
+                onDialogDismissed = ::onMenuDismissed
+            )
+                .setResolutionSelectedListener { width, height ->
+                    applyPinnedVideoQuality(width, height)
+                }.show(activity.supportFragmentManager, null)
+        }
+    }
+
+    /**
+     * Pin (or unpin) video quality so live ABR cannot drift away from the
+     * user's pick. Auto clears the min size and restores the season max;
+     * a concrete pick sets both min and max to that rung.
+     */
+    private fun applyPinnedVideoQuality(width: Int, height: Int) {
+        val isAuto = width == Int.MAX_VALUE && height == Int.MAX_VALUE
+        val seasonYear = ChannelPlaybackFragment.findSeasonYear(activity)
+        val isLegacySeason = seasonYear <= 2025
+        val builder = trackSelector.buildUponParameters()
+        if (isAuto) {
+            builder
+                .setMinVideoSize(0, 0)
+                .setMaxVideoSize(
+                    if (isLegacySeason) 1920 else Int.MAX_VALUE,
+                    if (isLegacySeason) 1080 else Int.MAX_VALUE
+                )
+                .setForceHighestSupportedBitrate(true)
+            Log.i(TAG, "Video quality set to Auto (seasonYear=$seasonYear legacy=$isLegacySeason)")
+        } else {
+            builder
+                .setMinVideoSize(width, height)
+                .setMaxVideoSize(width, height)
+                .setForceHighestSupportedBitrate(true)
+            Log.i(TAG, "Video quality pinned to ${width}x${height}")
+        }
+        trackSelector.setParameters(builder)
+        updateSubtitle()
+    }
+
+    private fun toggleClosedCaptions() {
+        if (closedCaptionAction.index == PlaybackControlsRow.ClosedCaptioningAction.INDEX_OFF) {
+            closedCaptionAction.index = PlaybackControlsRow.ClosedCaptioningAction.INDEX_ON
+            closedCaptionsTextView.visibility = View.VISIBLE
+        } else {
+            closedCaptionAction.index = PlaybackControlsRow.ClosedCaptioningAction.INDEX_OFF
+            closedCaptionsTextView.visibility = View.GONE
+        }
+    }
+
+    private fun openAudioSelectionDialog() {
+        val audioGroups = exoPlayer.currentTracks.groups
+            .filter { it.type == C.TRACK_TYPE_AUDIO }
+        activity.window.decorView.post {
+            val dialog = AudioSelectionDialogFragment(
+                audioGroups = audioGroups,
+                includeCustomRadioOption = isCustomRadioSelectable?.invoke() != false,
+                onDialogDismissed = ::onMenuDismissed
+            )
+            dialog.onAudioLanguageSelected { language ->
+                onAudioTrackSelected?.invoke()
+                trackSelector.setParameters(
+                    trackSelector.buildUponParameters()
+                        .setPreferredAudioLanguage(language)
+                        .setPreferredTextLanguage(language)
+                )
+                updateSubtitle()
+            }
+            dialog.onCustomRadioSelected {
+                onCustomRadioRequested?.invoke()
+                updateSubtitle()
+            }
+            dialog.show(activity.supportFragmentManager, null)
+        }
+    }
+
+    // ── AnalyticsListener overrides ──────────────────────────────────────────
+
+    override fun onRenderedFirstFrame(
+        eventTime: AnalyticsListener.EventTime,
+        output: Any,
+        renderTimeMs: Long
+    ) {
+        Log.i(TAG, "onRenderedFirstFrame: output=$output renderTimeMs=${renderTimeMs}ms")
+    }
+
+    override fun onPlayerError(
+        eventTime: AnalyticsListener.EventTime,
+        error: androidx.media3.common.PlaybackException
+    ) {
+        super.onPlayerError(eventTime, error)
+        Log.e(TAG, "Player error: ${error.errorCodeName} (${error.errorCode})", error)
+        (activity as? ChannelPlaybackActivity)
+    }
+
+    override fun onTracksChanged(eventTime: AnalyticsListener.EventTime, tracks: Tracks) {
+        Log.d(TAG, "onTracksChanged")
+        val selectedAudioGroup = tracks.groups.firstOrNull {
+            it.type == C.TRACK_TYPE_AUDIO && it.isSelected
+        }
+        selectedAudioGroup?.let { group ->
+            for (i in 0 until group.length) {
+                if (group.isTrackSelected(i)) {
+                    currentAudioFormat = group.getTrackFormat(i)
+                    break
+                }
+            }
+            updateSubtitle()
+        }
+    }
+
+    override fun onDownstreamFormatChanged(
+        eventTime: AnalyticsListener.EventTime,
+        mediaLoadData: MediaLoadData
+    ) {
+        Log.d(TAG, "onDownstreamFormatChanged")
+        val trackFormat = mediaLoadData.trackFormat ?: return
+        if (mediaLoadData.dataType != C.DATA_TYPE_MEDIA) return
+        if (mediaLoadData.trackType == C.TRACK_TYPE_VIDEO) {
+            currentVideoFormat = trackFormat
+            updateSubtitle()
+        }
+    }
+
+    private fun updateSubtitle() {
+        val videoQuality = currentVideoQualityLabel() ?: currentResolutionActionLabel()
+        val audioLanguage = currentAudioLabel()
+        val overlayText = listOfNotNull(videoQuality, audioLanguage).joinToString(separator = " / ")
+        subtitle = overlayText
+        overlaySubtitleView?.post {
+            overlaySubtitleView?.text = overlayText
+        }
+        refreshControlBarActionLabels(audioLanguage = audioLanguage)
+    }
+
+    fun refreshSubtitle() {
+        updateSubtitle()
+    }
+
+    private fun currentVideoQualityLabel(): String? = currentVideoFormat?.let {
+        val fps = it.frameRate.roundToInt()
+        if (it.height >= 2160) {
+            context.getString(R.string.video_quality_4k, it.height, fps)
+        } else {
+            context.getString(R.string.video_quality, it.height, fps)
+        }
+    }
+
+    private fun currentResolutionActionLabel(): String? {
+        val availableFormats = exoPlayer.currentTracks.groups
+            .filter { it.type == C.TRACK_TYPE_VIDEO }
+            .flatMap { group ->
+                (0 until group.length).map { group.getTrackFormat(it) }
+            }
+            .filter { it.height > 0 && it.frameRate > 1F }
+            .sortedWith(compareBy<Format> { it.height }.thenBy { it.frameRate.roundToInt() })
+
+        if (availableFormats.isEmpty()) {
+            return currentVideoQualityLabel()
+        }
+
+        val params = trackSelector.parameters
+        // Locked quality sets min==max; Auto keeps min at 0.
+        val isAuto = params.minVideoWidth <= 0 && params.minVideoHeight <= 0
+
+        val targetFormat = if (isAuto) {
+            availableFormats.last()
+        } else {
+            availableFormats.lastOrNull { format ->
+                format.width <= params.maxVideoWidth && format.height <= params.maxVideoHeight &&
+                    format.width >= params.minVideoWidth && format.height >= params.minVideoHeight
+            } ?: availableFormats.lastOrNull { format ->
+                format.width <= params.maxVideoWidth && format.height <= params.maxVideoHeight
+            } ?: availableFormats.last()
+        }
+
+        val qualityLabel = formatQualityLabel(targetFormat)
+        return if (isAuto) "Auto $qualityLabel" else qualityLabel
+    }
+
+    private fun formatQualityLabel(format: Format): String {
+        val fps = format.frameRate.roundToInt()
+        return if (format.height >= 2160) {
+            context.getString(R.string.video_quality_4k, format.height, fps)
+        } else {
+            context.getString(R.string.video_quality, format.height, fps)
+        }
+    }
+
+    private fun currentAudioLabel(): String? = currentAudioLabelOverride?.invoke()
+        ?: currentAudioFormat?.let(::displayAudioTrackLabel)
+
+    private fun refreshControlBarActionLabels(
+        videoQuality: String? = currentResolutionActionLabel(),
+        audioLanguage: String? = currentAudioLabel()
+    ) {
+        selectAudioAction.label2 = audioLanguage
+        resolutionSelectionAction.label2 = videoQuality
+
+        val primaryActionsAdapter = controlsRow?.primaryActionsAdapter as? ArrayObjectAdapter ?: return
+        refreshPrimaryAction(primaryActionsAdapter, selectAudioAction)
+        refreshPrimaryAction(primaryActionsAdapter, resolutionSelectionAction)
+    }
+
+    private fun refreshPrimaryAction(adapter: ArrayObjectAdapter, action: Action) {
+        val index = adapter.indexOf(action)
+        if (index >= 0) {
+            adapter.notifyArrayItemRangeChanged(index, 1)
+        }
+    }
+
+    private fun Action.debounceKey(): String {
+        return buildString {
+            append(javaClass.name)
+            append('|')
+            append(id)
+            append('|')
+            append(label1 ?: "")
+        }
+    }
+
+    private fun shouldIgnoreRapidDuplicateAction(action: Action, actionKey: String): Boolean {
+        val shouldDebounce = action is PlaybackControlsRow.PlayPauseAction ||
+            shouldDisableFocusForTouchControls
+        if (!shouldDebounce) return false
+        val now = SystemClock.elapsedRealtime()
+        val shouldIgnore = actionKey == lastHandledActionKey &&
+            now - lastHandledActionAtElapsedMs <= 250L
+        if (!shouldIgnore) {
+            lastHandledActionKey = actionKey
+            lastHandledActionAtElapsedMs = now
+        }
+        return shouldIgnore
+    }
+
+    private fun LeanbackPlayerAdapter.seekOffset(offset: Long) {
+        val position = max(min(currentPosition + offset, duration), 0)
+        seekTo(position)
+    }
+}
