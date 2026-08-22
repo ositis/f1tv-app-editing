@@ -758,7 +758,12 @@ class ChannelPlaybackFragment : VideoSupportFragment(), Player.Listener {
         }
         Log.d(TAG, "Playback state → $state")
         when (playbackState) {
-            Player.STATE_BUFFERING -> scheduleStartupBufferingWatchdog("buffering")
+            // Watchdog is startup-only: never re-arm after the first frame for this source.
+            Player.STATE_BUFFERING -> {
+                if (!hasRenderedFirstFrameForCurrentSource) {
+                    scheduleStartupBufferingWatchdog("buffering")
+                }
+            }
             Player.STATE_READY,
             Player.STATE_ENDED,
             Player.STATE_IDLE -> cancelStartupBufferingWatchdog()
@@ -780,6 +785,8 @@ class ChannelPlaybackFragment : VideoSupportFragment(), Player.Listener {
 
     private fun scheduleStartupBufferingWatchdog(reason: String) {
         val viewing = currentViewing ?: return
+        // After first frame, mid-stream buffering must never trigger a playback restart.
+        if (hasRenderedFirstFrameForCurrentSource) return
         if (!looksLikeUhdOrHdr(viewing.streamType) && !looksLikeUhdOrHdr(viewing.requestedOverrideStreamType)) {
             return
         }
@@ -788,6 +795,7 @@ class ChannelPlaybackFragment : VideoSupportFragment(), Player.Listener {
         val runnable = Runnable {
             startupBufferingWatchdogRunnable = null
             if (!isAdded) return@Runnable
+            if (hasRenderedFirstFrameForCurrentSource) return@Runnable
             val activePlayer = _player ?: return@Runnable
             if (activePlayer.playbackState != Player.STATE_BUFFERING || activePlayer.isPlaying) return@Runnable
 
@@ -885,12 +893,11 @@ class ChannelPlaybackFragment : VideoSupportFragment(), Player.Listener {
 
     override fun onStop() {
         super.onStop()
-        Log.i(TAG, "onStop: explicitly releasing player early to prevent MediaTek secure codec corruption upon surfaceDestroyed")
+        // Release the player early for MediaTek secure-codec surface teardown safety,
+        // but NEVER finish the activity here. Dialogs, HDR fragment replacement, and
+        // transient focus loss would otherwise kick users back to the channel selector.
+        Log.i(TAG, "onStop: releasing player (activity stays alive)")
         releasePlayerSafely("onStop")
-        if (!requireActivity().isChangingConfigurations) {
-            Log.i(TAG, "onStop: finishing playback activity as it was pushed to background")
-            requireActivity().finish()
-        }
     }
 
     override fun onDestroy() {
@@ -965,8 +972,37 @@ class ChannelPlaybackFragment : VideoSupportFragment(), Player.Listener {
 
     internal fun exoPlayerOrNull(): ExoPlayer? = _player
 
+    internal fun switchToViewing(viewing: F1TvViewing, preservePlaybackPosition: Boolean = false) {
+        val positionMs = if (preservePlaybackPosition) _player?.currentPosition ?: 0L else 0L
+        stopCustomRadio()
+        hasAutoInjectedCustomRadio = false
+        arguments = (arguments ?: Bundle()).apply {
+            putParcelable(ARG_VIEWING, viewing)
+        }
+        if (_player == null) {
+            currentViewing = viewing
+            return
+        }
+        preparePlayer(viewing)
+        if (preservePlaybackPosition && positionMs > 0L) {
+            _player?.seekTo(positionMs)
+        }
+        playbackGlue?.refreshSubtitle()
+        view?.post {
+            val settings = settingsRepository.getCurrent()
+            if (shouldAutoInjectCustomRadio(settings)) {
+                hasAutoInjectedCustomRadio = true
+                injectCustomRadio()
+            }
+        }
+    }
+
     internal fun toggleMultiCamFromTransport() {
         (activity as? ChannelPlaybackActivity)?.toggleMultiCam(_player)
+    }
+
+    internal fun showRaceLayoutPickerFromTransport() {
+        (activity as? ChannelPlaybackActivity)?.showRaceLayoutPicker(_player)
     }
 
     // ── Grand Prix Radio ──────────────────────────────────────────────────────
@@ -993,6 +1029,8 @@ class ChannelPlaybackFragment : VideoSupportFragment(), Player.Listener {
         val radioPlan = buildCustomRadioPlan(settings)
         if (radioPlan.isEmpty()) {
             logCustomRadioTelemetry("plan_empty", detail = "No custom radio backend available")
+            Toast.makeText(requireContext(), R.string.custom_radio_unavailable_message, Toast.LENGTH_LONG).show()
+            customRadioInjected = false
             return
         }
         customRadioOffsetMs = settings.customRadioDelayMs
@@ -1211,32 +1249,10 @@ class ChannelPlaybackFragment : VideoSupportFragment(), Player.Listener {
     }
 
     private fun buildCustomRadioPlan(settings: Settings): List<CustomRadioPlanEntry> {
-        val customUrl = settings.customRadioUrl.trim()
-        if (customUrl.isNotBlank()) {
-            if (!isSupportedCustomRadioUrl(customUrl)) {
-                Log.w(TAG, "Ignoring invalid custom radio URL: $customUrl")
-                return emptyList()
-            }
-            return listOf(
-                CustomRadioPlanEntry(
-                    backend = Settings.CustomRadioBackend.EXOPLAYER,
-                    source = CustomRadioSource(
-                        name = "custom",
-                        url = customUrl,
-                        normalizeWithInAppHls = true
-                    )
-                )
-            )
-        }
-
-        return CustomRadioSources.defaultCandidate?.let {
-            listOf(
-                CustomRadioPlanEntry(
-                    Settings.CustomRadioBackend.EXOPLAYER,
-                    it
-                )
-            )
-        } ?: emptyList()
+        return CustomRadioSources.buildPlan(
+            settingsCustomUrl = settings.customRadioUrl,
+            buildConfigUrl = fr.groggy.racecontrol.tv.BuildConfig.CUSTOM_RADIO_URL
+        ).filter { isSupportedCustomRadioUrl(it.source.url) }
     }
 
     private fun isSupportedCustomRadioUrl(url: String): Boolean {

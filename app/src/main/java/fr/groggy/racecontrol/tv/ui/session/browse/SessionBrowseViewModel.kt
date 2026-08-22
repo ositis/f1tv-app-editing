@@ -30,39 +30,49 @@ class SessionBrowseViewModel @Inject constructor(
         private val TAG = SessionBrowseViewModel::class.simpleName
     }
 
+    /** Becomes true only after [sessionService.loadChannels] completes for the active content. */
+    private val channelsLoadComplete = MutableStateFlow(false)
+
+    /**
+     * Load channels once, then emit the first completed session classification.
+     * Never treats the empty Room emission *before* load as SingleChannel.
+     */
     suspend fun sessionLoaded(sessionId: String, contentId: String): Session = withContext(Dispatchers.IO) {
+        channelsLoadComplete.value = false
         sessionService.loadChannels(contentId)
+        channelsLoadComplete.value = true
         return@withContext session(sessionId, contentId).first()
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)
     fun session(sessionId: String, contentId: String): Flow<Session> {
-        return sessionRepository.observeById(sessionId)
-            .onEach { Log.d(TAG, "Session changed") }
-            .flatMapLatest { session ->
-                val channelList = channels(contentId).first()
-                val isLiveSession = session.isLiveNow()
-                Log.d(TAG, "Loaded channel count ${channelList.size}")
-
-                if (channelList.isEmpty()) {
-                    flowOf(
-                        SingleChannelSession(
-                            contentId = session.contentId,
-                            channel = channelList.firstOrNull()?.id,
-                            isLiveSession = isLiveSession
-                        )
-                    )
-                } else {
-                    flowOf(
-                        MultiChannelsSession(
-                            contentId = session.contentId,
-                            name = session.name,
-                            channels = channelList,
-                            isLiveSession = isLiveSession
-                        )
-                    )
-                }
+        return combine(
+            sessionRepository.observeById(sessionId).onEach { Log.d(TAG, "Session changed") },
+            channels(contentId),
+            channelsLoadComplete
+        ) { session, channelList, loaded ->
+            if (!loaded) {
+                Log.d(TAG, "Channels still loading — suppressing empty Room as SingleChannel")
+                return@combine null
             }
+            val isLiveSession = session.isLiveNow()
+            Log.d(TAG, "Loaded channel count ${channelList.size}")
+            if (channelList.size <= 1) {
+                SingleChannelSession(
+                    contentId = session.contentId,
+                    channel = channelList.firstOrNull()?.id,
+                    isLiveSession = isLiveSession
+                )
+            } else {
+                MultiChannelsSession(
+                    contentId = session.contentId,
+                    name = session.name,
+                    channels = channelList,
+                    isLiveSession = isLiveSession
+                )
+            }
+        }
+            .filterNotNull()
             .distinctUntilChanged()
             .onEach { Log.d(TAG, "VM session changed") }
     }
@@ -117,7 +127,8 @@ data class MultiChannelsSession(
 sealed class Channel {
 
     companion object {
-        val diffCallback = DataClassByIdDiffCallback { channel: Channel -> channel.id }
+        /** Diff by stable string channel id so Room re-emits do not full-rebind the grid. */
+        val diffCallback = DataClassByIdDiffCallback { channel: Channel -> channel.id?.value }
     }
 
     abstract val id: F1TvChannelId?

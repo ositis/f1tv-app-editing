@@ -1,0 +1,4 @@
+# Copy to signing.local.properties in the repo root (gitignored; do not commit secrets).
+# signing.key.store.path=/path/to/your.keystore
+# signing.key.password=your-keystore-password
+# signing.key.alias=your-key-alias

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="AppTheme" parent="@style/Theme.Leanback">
-        <item name="android:windowBackground">@color/f1_black</item>
+        <item name="android:windowBackground">@drawable/bg_command_center</item>
         <item name="android:colorBackground">@color/f1_black</item>
         <item name="defaultBrandColor">@color/f1_red</item>
         <item name="defaultBrandColorDark">@color/f1_red_dim</item>
@@ -9,6 +9,7 @@
         <item name="playbackProgressPrimaryColor">@color/f1_red</item>
         <item name="android:textColorPrimary">@color/f1_white</item>
         <item name="android:textColorSecondary">@color/f1_silver</item>
+        <item name="android:textColorHint">@color/f1_muted</item>
     </style>
 
     <style name="PlaybackTheme" parent="@style/Theme.Leanback">
@@ -23,9 +24,17 @@
         <item name="android:forceDarkAllowed">false</item>
         <item name="defaultBrandColor">@color/f1_red</item>
         <item name="playbackProgressPrimaryColor">@color/f1_red</item>
+        <item name="android:textColorPrimary">@color/f1_white</item>
     </style>
 
     <style name="TextCardStyle" parent="Widget.Leanback.BaseCardViewStyle">
         <item name="cardBackground">@null</item>
+    </style>
+
+    <style name="CommandCenterHeader">
+        <item name="android:textColor">@color/f1_white</item>
+        <item name="android:textSize">28sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.04</item>
     </style>
 </resources>

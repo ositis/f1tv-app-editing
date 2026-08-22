@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFF">
+    <!-- Multiview grid: main + side tiles -->
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M3,3h12v18H3V3zM17,3h4v5h-4V3zM17,10h4v5h-4v-5zM17,17h4v4h-4v-4z"/>
+</vector>

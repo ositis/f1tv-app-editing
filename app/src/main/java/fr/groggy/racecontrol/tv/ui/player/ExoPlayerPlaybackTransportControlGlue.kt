@@ -85,19 +85,19 @@ class ExoPlayerPlaybackTransportControlGlue(
         Action.NO_ID,
         activity.getString(R.string.player_map_action),
         null,
-        ContextCompat.getDrawable(context, R.drawable.ic_video_settings)
+        ContextCompat.getDrawable(context, R.drawable.ic_race_map)
     )
     private val multiCamAction = Action(
         Action.NO_ID,
         activity.getString(R.string.player_multicam_action),
         null,
-        ContextCompat.getDrawable(context, R.drawable.ic_switch_channel)
+        ContextCompat.getDrawable(context, R.drawable.ic_multiview)
     )
     private val resolutionSelectionAction = Action(
         Action.NO_ID,
         activity.getText(R.string.video_selection_dialog_title),
         null,
-        ContextCompat.getDrawable(context, R.drawable.ic_video_settings)
+        ContextCompat.getDrawable(context, R.drawable.ic_quality)
     )
     private val closedCaptionAction = PlaybackControlsRow.ClosedCaptioningAction(activity)
 
@@ -327,11 +327,15 @@ class ExoPlayerPlaybackTransportControlGlue(
                 val host = activity as? ChannelPlaybackActivity
                 if (host?.isMultiCamAvailable() != true && host?.isMultiCamActive() != true) {
                     Toast.makeText(activity, R.string.player_multicam_unavailable, Toast.LENGTH_SHORT).show()
+                    onMenuDismissed()
                 } else {
-                    activity.supportFragmentManager.fragments
-                        .filterIsInstance<ChannelPlaybackFragment>()
-                        .firstOrNull()
-                        ?.toggleMultiCamFromTransport()
+                    openMenuOnce {
+                        activity.supportFragmentManager.fragments
+                            .filterIsInstance<ChannelPlaybackFragment>()
+                            .firstOrNull()
+                            ?.showRaceLayoutPickerFromTransport()
+                        onMenuDismissed()
+                    }
                 }
             }
             else -> super.onActionClicked(action)

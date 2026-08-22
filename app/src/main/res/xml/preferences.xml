@@ -99,7 +99,7 @@
             android:key="restrict_custom_radio_to_live_sessions"
             android:title="@string/settings_restrict_custom_radio_to_live_sessions_title"
             android:summary="@string/settings_restrict_custom_radio_to_live_sessions_summary"
-            android:defaultValue="true" />
+            android:defaultValue="false" />
 
         <Preference
             android:key="reset_settings"

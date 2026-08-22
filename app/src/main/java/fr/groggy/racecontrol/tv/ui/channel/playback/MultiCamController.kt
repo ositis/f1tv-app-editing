@@ -23,7 +23,6 @@ import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import fr.groggy.racecontrol.tv.R
 import fr.groggy.racecontrol.tv.core.ViewingService
 import fr.groggy.racecontrol.tv.core.settings.Settings
-import fr.groggy.racecontrol.tv.f1tv.F1TvOnboardChannel
 import fr.groggy.racecontrol.tv.f1tv.F1TvViewing
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -32,20 +31,34 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
 
+/** Secondary F1TV feed for Multiview (OBC or basic channel). */
+data class MultiCamFeed(
+    val channelId: String,
+    val contentId: String,
+    val label: String
+)
+
+enum class RaceLayoutMode {
+    FULLSCREEN,
+    SIDE,
+    QUAD
+}
+
 /**
- * MultiViewer-style side OBC cams: up to 4 muted SD (≤480p) feeds synced to the main player.
- * Slots that fail to open are dropped so multi-cam only shows reliable feeds.
+ * Multiview: Side strip (up to 3 muted ≤480p) or Quad grid (3 secondary cells beside main TL).
  */
 class MultiCamController(
     private val context: Context,
     private val sideColumn: LinearLayout,
+    private val quadCells: List<FrameLayout>,
     private val viewingService: ViewingService,
     private val httpDataSourceFactory: HttpDataSource.Factory,
     private val scope: CoroutineScope
 ) {
     companion object {
         private const val TAG = "MultiCamController"
-        const val MAX_SLOTS = 4
+        const val MAX_SIDE_SLOTS = 3
+        const val MAX_QUAD_SLOTS = 3
         private const val MAX_VIDEO_WIDTH = 854
         private const val MAX_VIDEO_HEIGHT = 480
         private const val DRIFT_THRESHOLD_MS = 450L
@@ -53,9 +66,10 @@ class MultiCamController(
     }
 
     private data class Slot(
-        val channel: F1TvOnboardChannel,
+        val feed: MultiCamFeed,
         val player: ExoPlayer,
-        val container: FrameLayout
+        val container: FrameLayout,
+        val host: ViewGroup
     )
 
     private val slots = mutableListOf<Slot>()
@@ -63,6 +77,7 @@ class MultiCamController(
     private var startJob: Job? = null
     private val handler = Handler(Looper.getMainLooper())
     private var active = false
+    private var mode: RaceLayoutMode = RaceLayoutMode.FULLSCREEN
 
     private val mainListener = object : Player.Listener {
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
@@ -93,7 +108,7 @@ class MultiCamController(
                     if (drift > DRIFT_THRESHOLD_MS &&
                         slot.player.playbackState == Player.STATE_READY
                     ) {
-                        Log.d(TAG, "Resync ${slot.channel.name} drift=${drift}ms -> $target")
+                        Log.d(TAG, "Resync ${slot.feed.label} drift=${drift}ms -> $target")
                         slot.player.seekTo(target)
                     }
                 }
@@ -103,33 +118,91 @@ class MultiCamController(
     }
 
     val isActive: Boolean get() = active
+    val currentMode: RaceLayoutMode get() = mode
 
-    fun start(
+    fun startSide(
         main: ExoPlayer,
-        candidates: List<F1TvOnboardChannel>,
+        candidates: List<MultiCamFeed>,
+        streamType: Settings.StreamType,
+        onResult: (enabledSlots: Int) -> Unit
+    ) {
+        start(
+            mode = RaceLayoutMode.SIDE,
+            main = main,
+            candidates = candidates,
+            maxSlots = MAX_SIDE_SLOTS,
+            hosts = emptyList(),
+            streamType = streamType,
+            onResult = onResult
+        )
+    }
+
+    fun startQuad(
+        main: ExoPlayer,
+        candidates: List<MultiCamFeed>,
+        streamType: Settings.StreamType,
+        onResult: (enabledSlots: Int) -> Unit
+    ) {
+        start(
+            mode = RaceLayoutMode.QUAD,
+            main = main,
+            candidates = candidates,
+            maxSlots = MAX_QUAD_SLOTS.coerceAtMost(quadCells.size),
+            hosts = quadCells,
+            streamType = streamType,
+            onResult = onResult
+        )
+    }
+
+    private fun start(
+        mode: RaceLayoutMode,
+        main: ExoPlayer,
+        candidates: List<MultiCamFeed>,
+        maxSlots: Int,
+        hosts: List<FrameLayout>,
         streamType: Settings.StreamType,
         onResult: (enabledSlots: Int) -> Unit
     ) {
         stop()
+        this.mode = mode
         mainPlayer = main
         main.addListener(mainListener)
         sideColumn.removeAllViews()
-        sideColumn.visibility = View.VISIBLE
+        if (mode == RaceLayoutMode.SIDE) {
+            sideColumn.visibility = View.VISIBLE
+        }
         startJob = scope.launch {
             val opened = mutableListOf<Slot>()
-            for (channel in candidates.take(MAX_SLOTS * 2)) {
-                if (opened.size >= MAX_SLOTS) break
-                val slot = openSlot(channel, streamType, main) ?: continue
+            for (feed in candidates.take(maxSlots * 2)) {
+                if (opened.size >= maxSlots) break
+                val host: ViewGroup = when (mode) {
+                    RaceLayoutMode.SIDE -> sideColumn
+                    RaceLayoutMode.QUAD -> hosts.getOrNull(opened.size) ?: break
+                    RaceLayoutMode.FULLSCREEN -> break
+                }
+                val slot = openSlot(feed, streamType, main, host) ?: continue
                 opened += slot
                 withContext(Dispatchers.Main) {
-                    sideColumn.addView(
-                        slot.container,
-                        LinearLayout.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                            0,
-                            1f
+                    if (mode == RaceLayoutMode.SIDE) {
+                        sideColumn.addView(
+                            slot.container,
+                            LinearLayout.LayoutParams(
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                0,
+                                1f
+                            )
                         )
-                    )
+                    } else {
+                        host.removeAllViews()
+                        host.addView(
+                            slot.container,
+                            FrameLayout.LayoutParams(
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                ViewGroup.LayoutParams.MATCH_PARENT
+                            )
+                        )
+                        host.visibility = View.VISIBLE
+                    }
                 }
             }
             withContext(Dispatchers.Main) {
@@ -137,9 +210,10 @@ class MultiCamController(
                 slots.addAll(opened)
                 active = opened.isNotEmpty()
                 if (!active) {
-                    sideColumn.visibility = View.GONE
+                    clearHosts()
                     main.removeListener(mainListener)
                     mainPlayer = null
+                    this@MultiCamController.mode = RaceLayoutMode.FULLSCREEN
                 } else {
                     seekSidesToMain("start")
                     syncPlayWhenReady(main.playWhenReady)
@@ -163,9 +237,18 @@ class MultiCamController(
             }
         }
         slots.clear()
+        clearHosts()
+        active = false
+        mode = RaceLayoutMode.FULLSCREEN
+    }
+
+    private fun clearHosts() {
         sideColumn.removeAllViews()
         sideColumn.visibility = View.GONE
-        active = false
+        quadCells.forEach { cell ->
+            cell.removeAllViews()
+            cell.visibility = View.GONE
+        }
     }
 
     fun onMainPaused() = syncPlayWhenReady(false)
@@ -186,30 +269,32 @@ class MultiCamController(
     }
 
     private suspend fun openSlot(
-        channel: F1TvOnboardChannel,
+        feed: MultiCamFeed,
         streamType: Settings.StreamType,
-        main: ExoPlayer
+        main: ExoPlayer,
+        host: ViewGroup
     ): Slot? = withContext(Dispatchers.IO) {
         try {
             val viewing = viewingService.getViewing(
-                channelId = channel.channelId,
-                contentId = channel.contentId,
+                channelId = feed.channelId,
+                contentId = feed.contentId,
                 streamType = streamType,
                 preferHdrManifest = false
             )
             withContext(Dispatchers.Main) {
-                buildSlot(channel, viewing, main)
+                buildSlot(feed, viewing, main, host)
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Skipping OBC ${channel.name}: ${e.message}")
+            Log.w(TAG, "Skipping feed ${feed.label}: ${e.message}")
             null
         }
     }
 
     private fun buildSlot(
-        channel: F1TvOnboardChannel,
+        feed: MultiCamFeed,
         viewing: F1TvViewing,
-        main: ExoPlayer
+        main: ExoPlayer,
+        host: ViewGroup
     ): Slot? {
         return try {
             val trackSelector = DefaultTrackSelector(context).apply {
@@ -229,8 +314,8 @@ class MultiCamController(
             player.playWhenReady = main.playWhenReady
             player.addListener(object : Player.Listener {
                 override fun onPlayerError(error: PlaybackException) {
-                    Log.w(TAG, "Side cam error ${channel.name}: ${error.errorCodeName}")
-                    removeFailedSlot(channel.channelId)
+                    Log.w(TAG, "Side cam error ${feed.label}: ${error.errorCodeName}")
+                    removeFailedSlot(feed.channelId)
                 }
             })
 
@@ -242,7 +327,7 @@ class MultiCamController(
                 )
             }
             val label = TextView(context).apply {
-                text = channel.name
+                text = feed.label
                 setTextColor(ContextCompat.getColor(context, R.color.f1_white))
                 textSize = 12f
                 setBackgroundColor(0x990A0A0F.toInt())
@@ -265,21 +350,28 @@ class MultiCamController(
             player.setMediaSource(source)
             player.prepare()
             player.seekTo(main.currentPosition)
-            Slot(channel, player, container)
+            Slot(feed, player, container, host)
         } catch (e: Exception) {
-            Log.w(TAG, "buildSlot failed for ${channel.name}", e)
+            Log.w(TAG, "buildSlot failed for ${feed.label}", e)
             null
         }
     }
 
     private fun removeFailedSlot(channelId: String) {
-        val index = slots.indexOfFirst { it.channel.channelId == channelId }
+        val index = slots.indexOfFirst { it.feed.channelId == channelId }
         if (index < 0) return
         val slot = slots.removeAt(index)
         runCatching {
             slot.player.release()
         }
-        sideColumn.removeView(slot.container)
+        when (mode) {
+            RaceLayoutMode.SIDE -> sideColumn.removeView(slot.container)
+            RaceLayoutMode.QUAD -> {
+                slot.host.removeAllViews()
+                slot.host.visibility = View.GONE
+            }
+            RaceLayoutMode.FULLSCREEN -> Unit
+        }
         if (slots.isEmpty()) {
             stop()
         }

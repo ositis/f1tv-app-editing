@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -14,6 +15,14 @@ interface ChannelDao {
 
     @Query("DELETE FROM channels WHERE contentId = :contentId")
     suspend fun deleteOld(contentId: String)
+
+    @Transaction
+    suspend fun replaceAll(contentId: String, channels: List<ChannelEntity>) {
+        deleteOld(contentId)
+        if (channels.isNotEmpty()) {
+            upsert(channels)
+        }
+    }
 
     @Query("SELECT * FROM channels WHERE contentId = :contentId ORDER BY order_index")
     fun observeByContentId(contentId: String): Flow<List<ChannelEntity>>

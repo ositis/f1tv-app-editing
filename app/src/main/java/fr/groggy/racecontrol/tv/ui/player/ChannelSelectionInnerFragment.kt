@@ -34,7 +34,7 @@ class ChannelSelectionInnerFragment: VerticalGridSupportFragment(), OnItemViewCl
         val contentId = parentFragment?.arguments?.getString(ChannelSelectionDialog.EXTRA_CONTENT_ID) ?: return
         val viewModel: SessionBrowseViewModel by viewModels()
         lifecycleScope.launch {
-            lifecycle.repeatOnLifecycle(Lifecycle.State.CREATED) {
+            lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.session(sessionId, contentId).collect(::onUpdatedSession)
             }
         }

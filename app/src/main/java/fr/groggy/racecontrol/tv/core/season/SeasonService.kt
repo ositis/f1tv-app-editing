@@ -87,12 +87,8 @@ class SeasonService @Inject constructor(
         sessionRepository.observe(ids)
 //            .onEach { Log.d(TAG, "Sessions changed") }
             .flatMapLatest { sessions ->
-                val seriesFilter = RacingSeries.fromPreference(
-                    settingsRepository.getCurrent().defaultSeries
-                )
                 sessions
                 .filter { it.available && it.channels.isNotEmpty() }
-                .filter { seriesFilter == RacingSeries.ALL || it.series == seriesFilter }
                 .sortedByDescending { it.period.start }
                 .traverse { session -> thumbnail(session)
                     .map { thumbnail -> Session(
@@ -103,7 +99,8 @@ class SeasonService @Inject constructor(
                         contentSubtype = session.contentSubtype,
                         series = session.series,
                         thumbnail = thumbnail,
-                        channels = session.channels
+                        channels = session.channels,
+                        period = session.period
                     ) }
                 }
             }

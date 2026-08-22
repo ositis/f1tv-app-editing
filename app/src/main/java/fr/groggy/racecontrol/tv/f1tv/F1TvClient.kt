@@ -36,6 +36,7 @@ class F1TvClient @Inject constructor(
         private const val LIST_SESSIONS = "/2.0/R/%s/WEB_HLS/ALL/PAGE/SANDWICH/F1_TV_Premium_Monthly/$GROUP_ID?meetingId=%s&title=weekend-sessions"
         private const val LIST_FUTURE_SESSIONS = "/2.0/R/%s/WEB_HLS/ALL/PAGE/1350/F1_TV_Premium_Monthly/$GROUP_ID"
         private const val LIST_CHANNELS = "/3.0/R/%s/WEB_HLS/ALL/CONTENT/VIDEO/%s/F1_TV_Premium_Monthly/$GROUP_ID"
+        private const val LIST_EDITORIAL_PAGE = "/2.0/R/%s/WEB_HLS/ALL/PAGE/%d/F1_TV_Premium_Monthly/$GROUP_ID"
         private const val PICTURE_URL = "$ROOT_URL/image-resizer/image/%s?w=$MAIN_IMAGE_WIDTH&h=$MAIN_IMAGE_HEIGHT&o=L&q=HI"
         private const val LARGE_PICTURE_URL = "$ROOT_URL/image-resizer/image/%s?w=1920&h=1080&o=L&q=HI"
     }
@@ -45,6 +46,7 @@ class F1TvClient @Inject constructor(
     private val futureSessionResponseJsonAdapter = moshi.adapter(F1TvFutureSessionResponse::class.java)
     private val channelResponseJsonAdapter = moshi.adapter(F1TvChannelResponse::class.java)
     private val sessionArchiveJsonAdapter = moshi.adapter(SessionArchive::class.java)
+    private val pageResponseJsonAdapter = moshi.adapter(F1TvPageResponse::class.java)
     private val archiveSortInstant = Instant.EPOCH
 
     suspend fun getSeason(archive: Archive): F1TvSeason {
@@ -228,6 +230,63 @@ class F1TvClient @Inject constructor(
 //            Log.d(TAG, "Unable to parse date ${e.message}")
             archiveSortInstant //Less than ideal but at least we can see something
         }
+    }
+
+    suspend fun getEditorialPageVideos(page: F1TvEditorialPage): List<F1TvSession> {
+        return try {
+            val response = get(
+                LIST_EDITORIAL_PAGE.format(getCurrentLocale(), page.pageId),
+                pageResponseJsonAdapter
+            )
+            flattenPageVideos(response.resultObj.containers)
+                .distinctBy { it.contentId }
+                .sortedByDescending { it.period.start }
+                .also { Log.d(TAG, "Fetched editorial page ${page.name}: ${it.size} videos") }
+        } catch (e: Exception) {
+            Log.w(TAG, "getEditorialPageVideos(${page.name}) failed: ${e.message}")
+            emptyList()
+        }
+    }
+
+    private fun flattenPageVideos(containers: List<F1TvPageContainer>?): List<F1TvSession> {
+        if (containers.isNullOrEmpty()) return emptyList()
+        val result = mutableListOf<F1TvSession>()
+        for (container in containers) {
+            container.toPageVideoSession()?.let { result += it }
+            result += flattenPageVideos(container.retrieveItems?.resultObj?.containers)
+        }
+        return result
+    }
+
+    private fun F1TvPageContainer.toPageVideoSession(): F1TvSession? {
+        val meta = metadata ?: return null
+        val contentId = meta.contentId?.trim().orEmpty()
+        if (contentId.isBlank()) return null
+        val title = meta.title?.trim().orEmpty().ifBlank { meta.label?.trim().orEmpty() }
+        if (title.isBlank()) return null
+        val contentType = meta.contentType?.uppercase().orEmpty()
+        if (contentType.isNotBlank() && contentType !in setOf("VIDEO", "BUNDLE", "EPISODE")) {
+            return null
+        }
+        val picture = meta.pictureUrl?.trim().orEmpty()
+        return F1TvSession(
+            id = F1TvSessionId(id?.takeIf { it.isNotBlank() } ?: contentId),
+            eventId = "editorial",
+            pictureUrl = if (picture.isNotBlank()) PICTURE_URL.format(picture) else "",
+            contentId = contentId,
+            largePictureUrl = if (picture.isNotBlank()) LARGE_PICTURE_URL.format(picture) else "",
+            name = title,
+            contentSubtype = meta.contentSubtype?.trim().orEmpty().ifBlank { "SHOW" },
+            series = RacingSeries.classify(
+                uiSeries = meta.uiSeries,
+                series = meta.emfAttributes?.series,
+                title = title
+            ),
+            period = InstantPeriod(start = archiveSortInstant, end = archiveSortInstant),
+            available = true,
+            images = listOf(),
+            channels = listOf()
+        )
     }
 
     suspend fun getChannels(contentId: String): List<F1TvChannel> {

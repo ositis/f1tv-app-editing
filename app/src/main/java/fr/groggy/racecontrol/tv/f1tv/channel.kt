@@ -41,7 +41,7 @@ data class F1TvChannelAdditionalStream(
     val identifier: String? = null
 )
 
-class F1TvChannelId(val value: String)
+data class F1TvChannelId(val value: String)
 
 sealed class F1TvBasicChannelType {
     object F1Live : F1TvBasicChannelType()
@@ -52,24 +52,37 @@ sealed class F1TvBasicChannelType {
     data class Unknown(val type: String, val name: String) : F1TvBasicChannelType()
 
     companion object {
+        /** Trim, uppercase, collapse internal whitespace for feed matching. */
+        fun normalizeFeedKey(raw: String?): String {
+            if (raw.isNullOrBlank()) return ""
+            return raw.trim().uppercase().replace(Regex("\\s+"), " ")
+        }
+
         /**
          * Prefer stable [identifier] (PRES/WIF/TRACKER/DATA) over localized [name].
+         * Title matching includes "F1 LIVE" / "F1LIVE" / PRES.
          */
         fun from(type: String, name: String, identifier: String? = null): F1TvBasicChannelType {
-            when (identifier?.trim()?.uppercase()) {
+            when (normalizeFeedKey(identifier)) {
                 "WIF" -> return Wif
                 "PRES", "F1LIVE", "F1 LIVE" -> return F1Live
                 "TRACKER" -> return Tracker
                 "DATA" -> return Data
                 "PIT LANE", "PITLANE", "PLP" -> return PitLane
             }
+            val normalizedName = normalizeFeedKey(name)
+            if (normalizedName == "F1 LIVE" || normalizedName == "F1LIVE" || normalizedName == "PRES" ||
+                normalizedName.contains("F1 LIVE")
+            ) {
+                return F1Live
+            }
             return when (type.lowercase()) {
                 "wif" -> Wif
-                "additional" -> when (name.lowercase()) {
-                    "f1live", "f1 live" -> F1Live
-                    "pit lane", "pitlane" -> PitLane
-                    "tracker" -> Tracker
-                    "data" -> Data
+                "additional" -> when (normalizedName) {
+                    "F1LIVE", "F1 LIVE", "PRES" -> F1Live
+                    "PIT LANE", "PITLANE" -> PitLane
+                    "TRACKER" -> Tracker
+                    "DATA" -> Data
                     else -> Unknown(type, name)
                 }
                 else -> Unknown(type, name)

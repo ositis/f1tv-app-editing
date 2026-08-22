@@ -9,15 +9,19 @@ import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
-import kotlinx.coroutines.launch
 import dagger.hilt.android.AndroidEntryPoint
 import fr.groggy.racecontrol.tv.R
+import fr.groggy.racecontrol.tv.core.settings.SettingsRepository
 import fr.groggy.racecontrol.tv.ui.channel.playback.ChannelPlaybackActivity
+import kotlinx.coroutines.launch
 import org.threeten.bp.Year
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class SessionBrowseActivity : FragmentActivity() {
     companion object {
+        private const val TAG = "SessionBrowseActivity"
+
         fun intent(
             context: Context,
             sessionId: String,
@@ -31,6 +35,8 @@ class SessionBrowseActivity : FragmentActivity() {
             return intent
         }
     }
+
+    @Inject lateinit var settingsRepository: SettingsRepository
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -47,33 +53,41 @@ class SessionBrowseActivity : FragmentActivity() {
             lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 when (val session = viewModel.sessionLoaded(sessionId, contentId)) {
                     is SingleChannelSession -> {
-                        val intent = ChannelPlaybackActivity.intent(
-                            this@SessionBrowseActivity,
-                            sessionId,
-                            session.channel?.value,
-                            session.contentId,
-                            session.isLiveSession,
-                            seasonYear
+                        startActivity(
+                            ChannelPlaybackActivity.intent(
+                                this@SessionBrowseActivity,
+                                sessionId,
+                                session.channel?.value,
+                                session.contentId,
+                                session.isLiveSession,
+                                seasonYear
+                            )
                         )
-                        startActivity(intent)
                         finish()
                     }
                     is MultiChannelsSession -> {
-                        Log.d("SessionBrowseActivity", "Skipping channel selection and opening playback directly")
-                        val intent = ChannelPlaybackActivity.intent(
-                            this@SessionBrowseActivity,
-                            sessionId,
-                            null,
-                            session.contentId,
-                            session.isLiveSession,
-                            seasonYear
-                        )
-                        startActivity(intent)
-                        finish()
+                        if (settingsRepository.getCurrent().bypassChannelSelection) {
+                            Log.d(TAG, "Bypass channel selection — opening playback")
+                            startActivity(
+                                ChannelPlaybackActivity.intent(
+                                    this@SessionBrowseActivity,
+                                    sessionId,
+                                    null,
+                                    session.contentId,
+                                    session.isLiveSession,
+                                    seasonYear
+                                )
+                            )
+                            finish()
+                        } else {
+                            Log.d(TAG, "Showing channel grid (${session.channels.size} channels)")
+                            supportFragmentManager.beginTransaction()
+                                .replace(R.id.fragment_container, SessionGridFragment())
+                                .commitNowAllowingStateLoss()
+                        }
                     }
                 }
             }
         }
     }
-
 }

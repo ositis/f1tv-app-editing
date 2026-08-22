@@ -14,6 +14,7 @@ import android.view.MotionEvent
 import android.view.WindowManager
 import android.view.View
 import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.annotation.StringRes
@@ -30,12 +31,14 @@ import fr.groggy.racecontrol.tv.core.settings.Settings
 import fr.groggy.racecontrol.tv.core.settings.SettingsRepository
 import fr.groggy.racecontrol.tv.f1tv.F1TvBasicChannel
 import fr.groggy.racecontrol.tv.f1tv.F1TvBasicChannelType
+import fr.groggy.racecontrol.tv.f1tv.F1TvChannelId
 import fr.groggy.racecontrol.tv.f1tv.F1TvClient
 import fr.groggy.racecontrol.tv.f1tv.F1TvOnboardChannel
 import fr.groggy.racecontrol.tv.f1tv.F1TvViewing
 import fr.groggy.racecontrol.tv.ui.channel.playback.protectedhdr.ProtectedHdrRendererRouter
 import fr.groggy.racecontrol.tv.ui.channel.playback.protectedhdr.ProtectedHdrStreamClassifier
 import fr.groggy.racecontrol.tv.ui.player.ChannelSelectionDialog
+import fr.groggy.racecontrol.tv.ui.session.browse.BasicChannel
 import fr.groggy.racecontrol.tv.ui.session.browse.Channel
 import fr.groggy.racecontrol.tv.ui.signin.SignInActivity
 import fr.groggy.racecontrol.tv.utils.DeviceInfo
@@ -57,7 +60,10 @@ class ChannelPlaybackActivity : FragmentActivity(R.layout.activity_channel_playb
     private var retriedDirectMedia3HdrSurface: Boolean = false
     private var multiCamController: MultiCamController? = null
     private var cachedObcChannels: List<F1TvOnboardChannel> = emptyList()
+    private var cachedSideFeeds: List<MultiCamFeed> = emptyList()
+    private var cachedQuadFeeds: List<MultiCamFeed> = emptyList()
     private var multiCamProbed = false
+    private var raceLayoutMode: RaceLayoutMode = RaceLayoutMode.FULLSCREEN
 
     private val playbackTouchGestureDetector by lazy(LazyThreadSafetyMode.NONE) {
         GestureDetector(
@@ -107,9 +113,15 @@ class ChannelPlaybackActivity : FragmentActivity(R.layout.activity_channel_playb
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val column = findViewById<LinearLayout>(R.id.multi_cam_column)
+        val quadCells = listOf(
+            findViewById<FrameLayout>(R.id.quad_cell_tr),
+            findViewById<FrameLayout>(R.id.quad_cell_bl),
+            findViewById<FrameLayout>(R.id.quad_cell_br)
+        )
         multiCamController = MultiCamController(
             context = this,
             sideColumn = column,
+            quadCells = quadCells,
             viewingService = viewingService,
             httpDataSourceFactory = httpDataSourceFactory,
             scope = lifecycleScope
@@ -123,44 +135,123 @@ class ChannelPlaybackActivity : FragmentActivity(R.layout.activity_channel_playb
     override fun onDestroy() {
         multiCamController?.stop()
         multiCamController = null
-        setMultiCamColumnExpanded(false)
+        applyFullscreenLayoutChrome()
         super.onDestroy()
     }
 
-    fun isMultiCamAvailable(): Boolean = multiCamProbed && cachedObcChannels.isNotEmpty()
+    fun isMultiCamAvailable(): Boolean =
+        multiCamProbed && (cachedSideFeeds.isNotEmpty() || cachedQuadFeeds.isNotEmpty())
 
     fun isMultiCamActive(): Boolean = multiCamController?.isActive == true
 
+    fun currentRaceLayoutMode(): RaceLayoutMode = raceLayoutMode
+
     fun stopMultiCamSilent() {
         multiCamController?.stop()
-        setMultiCamColumnExpanded(false)
+        applyFullscreenLayoutChrome()
+        raceLayoutMode = RaceLayoutMode.FULLSCREEN
     }
 
-    fun toggleMultiCam(mainPlayer: ExoPlayer?) {
-        val controller = multiCamController ?: return
-        if (controller.isActive) {
-            stopMultiCamSilent()
-            Toast.makeText(this, R.string.player_multicam_disabled, Toast.LENGTH_SHORT).show()
-            return
+    fun showRaceLayoutPicker(mainPlayer: ExoPlayer?) {
+        val labels = arrayOf(
+            getString(R.string.player_layout_fullscreen),
+            getString(R.string.player_layout_side),
+            getString(R.string.player_layout_quad)
+        )
+        val checked = when (raceLayoutMode) {
+            RaceLayoutMode.FULLSCREEN -> 0
+            RaceLayoutMode.SIDE -> 1
+            RaceLayoutMode.QUAD -> 2
         }
-        if (!isMultiCamAvailable() || mainPlayer == null) {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.player_layout_title)
+            .setSingleChoiceItems(labels, checked) { dialog, which ->
+                dialog.dismiss()
+                when (which) {
+                    0 -> applyRaceLayout(RaceLayoutMode.FULLSCREEN, mainPlayer)
+                    1 -> applyRaceLayout(RaceLayoutMode.SIDE, mainPlayer)
+                    2 -> applyRaceLayout(RaceLayoutMode.QUAD, mainPlayer)
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    fun applyRaceLayout(mode: RaceLayoutMode, mainPlayer: ExoPlayer?) {
+        when (mode) {
+            RaceLayoutMode.FULLSCREEN -> {
+                stopMultiCamSilent()
+                Toast.makeText(
+                    this,
+                    getString(R.string.player_layout_applied, getString(R.string.player_layout_fullscreen)),
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+            RaceLayoutMode.SIDE -> startSideMultiview(mainPlayer)
+            RaceLayoutMode.QUAD -> startQuadMultiview(mainPlayer)
+        }
+    }
+
+    /** Legacy toggle: cycles Fullscreen ↔ Side for transport long-press paths. */
+    fun toggleMultiCam(mainPlayer: ExoPlayer?) {
+        if (raceLayoutMode == RaceLayoutMode.SIDE || raceLayoutMode == RaceLayoutMode.QUAD) {
+            applyRaceLayout(RaceLayoutMode.FULLSCREEN, mainPlayer)
+        } else {
+            showRaceLayoutPicker(mainPlayer)
+        }
+    }
+
+    private fun startSideMultiview(mainPlayer: ExoPlayer?) {
+        val controller = multiCamController ?: return
+        if (!multiCamProbed || cachedSideFeeds.isEmpty() || mainPlayer == null) {
             Toast.makeText(this, R.string.player_multicam_unavailable, Toast.LENGTH_SHORT).show()
             return
         }
-        setMultiCamColumnExpanded(true)
-        controller.start(
+        applySideLayoutChrome()
+        controller.startSide(
             main = mainPlayer,
-            candidates = cachedObcChannels,
+            candidates = cachedSideFeeds,
             streamType = Settings.StreamType.HLS
         ) { count ->
             if (count <= 0) {
-                setMultiCamColumnExpanded(false)
+                applyFullscreenLayoutChrome()
+                raceLayoutMode = RaceLayoutMode.FULLSCREEN
                 Toast.makeText(this, R.string.player_multicam_unavailable, Toast.LENGTH_SHORT).show()
             } else {
+                raceLayoutMode = RaceLayoutMode.SIDE
                 Toast.makeText(
                     this,
-                    getString(R.string.player_multicam_enabled, count),
-                    Toast.LENGTH_SHORT
+                    getString(R.string.player_layout_applied, getString(R.string.player_layout_side)) +
+                        " · $count",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
+    private fun startQuadMultiview(mainPlayer: ExoPlayer?) {
+        val controller = multiCamController ?: return
+        if (!multiCamProbed || cachedQuadFeeds.isEmpty() || mainPlayer == null) {
+            Toast.makeText(this, R.string.player_multicam_unavailable, Toast.LENGTH_SHORT).show()
+            return
+        }
+        applyQuadLayoutChrome()
+        controller.startQuad(
+            main = mainPlayer,
+            candidates = cachedQuadFeeds,
+            streamType = Settings.StreamType.HLS
+        ) { count ->
+            if (count <= 0) {
+                applyFullscreenLayoutChrome()
+                raceLayoutMode = RaceLayoutMode.FULLSCREEN
+                Toast.makeText(this, R.string.player_multicam_unavailable, Toast.LENGTH_SHORT).show()
+            } else {
+                raceLayoutMode = RaceLayoutMode.QUAD
+                Toast.makeText(
+                    this,
+                    getString(R.string.player_layout_applied, getString(R.string.player_layout_quad)) +
+                        " · $count",
+                    Toast.LENGTH_LONG
                 ).show()
             }
         }
@@ -174,31 +265,107 @@ class ChannelPlaybackActivity : FragmentActivity(R.layout.activity_channel_playb
         multiCamController?.onMainResumed()
     }
 
-    private fun setMultiCamColumnExpanded(expanded: Boolean) {
-        val column = findViewById<LinearLayout>(R.id.multi_cam_column) ?: return
-        val lp = column.layoutParams as LinearLayout.LayoutParams
-        if (expanded) {
-            lp.width = 0
-            lp.weight = 0.28f
-            column.visibility = View.VISIBLE
-        } else {
-            lp.width = 0
-            lp.weight = 0f
-            column.visibility = View.GONE
+    private fun applyFullscreenLayoutChrome() {
+        val root = findViewById<ViewGroup>(R.id.playback_root) ?: return
+        val mainPane = findViewById<ViewGroup>(R.id.main_playback_pane) ?: return
+        val column = findViewById<LinearLayout>(R.id.multi_cam_column)
+        mainPane.layoutParams = FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT
+        )
+        column?.visibility = View.GONE
+        column?.layoutParams = FrameLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT).apply {
+            gravity = android.view.Gravity.END
         }
-        column.layoutParams = lp
-        val mainPane = findViewById<ViewGroup>(R.id.main_playback_pane)
-        val mainLp = mainPane.layoutParams as LinearLayout.LayoutParams
-        mainLp.weight = if (expanded) 0.72f else 1f
-        mainPane.layoutParams = mainLp
+        listOf(R.id.quad_cell_tr, R.id.quad_cell_bl, R.id.quad_cell_br).forEach { id ->
+            findViewById<View>(id)?.apply {
+                visibility = View.GONE
+                layoutParams = FrameLayout.LayoutParams(0, 0)
+            }
+        }
+        root.requestLayout()
+    }
+
+    private fun applySideLayoutChrome() {
+        val root = findViewById<ViewGroup>(R.id.playback_root) ?: return
+        val mainPane = findViewById<ViewGroup>(R.id.main_playback_pane) ?: return
+        val column = findViewById<LinearLayout>(R.id.multi_cam_column) ?: return
+        val w = root.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
+        val sideW = (w * 0.28f).toInt()
+        mainPane.layoutParams = FrameLayout.LayoutParams(w - sideW, ViewGroup.LayoutParams.MATCH_PARENT).apply {
+            gravity = android.view.Gravity.START
+        }
+        column.layoutParams = FrameLayout.LayoutParams(sideW, ViewGroup.LayoutParams.MATCH_PARENT).apply {
+            gravity = android.view.Gravity.END
+        }
+        column.visibility = View.VISIBLE
+        listOf(R.id.quad_cell_tr, R.id.quad_cell_bl, R.id.quad_cell_br).forEach { id ->
+            findViewById<View>(id)?.visibility = View.GONE
+        }
+        root.requestLayout()
+    }
+
+    private fun applyQuadLayoutChrome() {
+        val root = findViewById<ViewGroup>(R.id.playback_root) ?: return
+        val mainPane = findViewById<ViewGroup>(R.id.main_playback_pane) ?: return
+        val column = findViewById<LinearLayout>(R.id.multi_cam_column)
+        column?.visibility = View.GONE
+        val w = root.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
+        val h = root.height.takeIf { it > 0 } ?: resources.displayMetrics.heightPixels
+        val halfW = w / 2
+        val halfH = h / 2
+        mainPane.layoutParams = FrameLayout.LayoutParams(halfW, halfH).apply {
+            gravity = android.view.Gravity.TOP or android.view.Gravity.START
+        }
+        fun cell(id: Int, gravity: Int) {
+            findViewById<View>(id)?.layoutParams = FrameLayout.LayoutParams(halfW, halfH).apply {
+                this.gravity = gravity
+            }
+        }
+        cell(R.id.quad_cell_tr, android.view.Gravity.TOP or android.view.Gravity.END)
+        cell(R.id.quad_cell_bl, android.view.Gravity.BOTTOM or android.view.Gravity.START)
+        cell(R.id.quad_cell_br, android.view.Gravity.BOTTOM or android.view.Gravity.END)
+        root.requestLayout()
     }
 
     private suspend fun probeMultiCamAvailability() {
         val contentId = ChannelPlaybackFragment.findContentId(this) ?: return
+        val mainChannelId = ChannelPlaybackFragment.findChannelId(this)
         val channels = runCatching { f1TvClient.getChannels(contentId) }.getOrElse { emptyList() }
         cachedObcChannels = channels.filterIsInstance<F1TvOnboardChannel>()
+        val basic = channels.filterIsInstance<F1TvBasicChannel>()
+
+        fun labelForBasic(type: F1TvBasicChannelType): String = when (type) {
+            F1TvBasicChannelType.PitLane -> "Pit Lane"
+            F1TvBasicChannelType.Tracker -> "Tracker"
+            F1TvBasicChannelType.Data -> "Data"
+            F1TvBasicChannelType.Wif -> "International"
+            F1TvBasicChannelType.F1Live -> "F1 Live"
+            is F1TvBasicChannelType.Unknown -> type.name
+        }
+
+        val preferredBasicOrder = listOf(
+            F1TvBasicChannelType.PitLane,
+            F1TvBasicChannelType.Tracker,
+            F1TvBasicChannelType.Data,
+            F1TvBasicChannelType.Wif
+        )
+        val basicFeeds = preferredBasicOrder.mapNotNull { wanted ->
+            basic.firstOrNull { it.type == wanted && it.channelId != null && it.channelId != mainChannelId }
+                ?.let { MultiCamFeed(it.channelId!!, it.contentId, labelForBasic(it.type)) }
+        }
+        val obcFeeds = cachedObcChannels
+            .filter { it.channelId != mainChannelId }
+            .map { MultiCamFeed(it.channelId, it.contentId, it.name) }
+
+        cachedSideFeeds = obcFeeds
+        cachedQuadFeeds = (basicFeeds + obcFeeds).distinctBy { it.channelId }
         multiCamProbed = true
-        Log.i(TAG, "Multi-cam probe: ${cachedObcChannels.size} OBC channels")
+        Log.i(
+            TAG,
+            "Multiview probe: side=${cachedSideFeeds.size} quad=${cachedQuadFeeds.size} " +
+                "(OBC=${cachedObcChannels.size})"
+        )
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -218,26 +385,82 @@ class ChannelPlaybackActivity : FragmentActivity(R.layout.activity_channel_playb
     }
 
     override fun onSwitchChannel(channel: Channel) {
-        val sessionId = ChannelPlaybackFragment.findSessionId(this) ?: return
-        startActivity(
-            intent(
-                this,
-                sessionId,
-                channel.id?.value,
-                channel.contentId,
-                ChannelPlaybackFragment.findIsLiveSession(this),
-                ChannelPlaybackFragment.findSeasonYear(this)
+        lifecycleScope.launch {
+            switchChannelInPlace(channel)
+        }
+    }
+
+    private suspend fun switchChannelInPlace(channel: Channel) {
+        val previousContentId = ChannelPlaybackFragment.findContentId(this)
+        val previousLayoutMode = raceLayoutMode
+        val preservePosition = previousContentId == channel.contentId
+
+        ChannelPlaybackFragment.putChannelId(intent, channel.id?.value)
+        ChannelPlaybackFragment.putContentId(intent, channel.contentId)
+
+        stopMultiCamSilent()
+        if (previousContentId != channel.contentId) {
+            probeMultiCamAvailability()
+        }
+
+        try {
+            var viewing = viewingService.getViewing(
+                channelId = channel.id?.value,
+                contentId = channel.contentId,
+                streamType = Settings.StreamType.HLS,
+                preferHdrManifest = preferHdrManifestForDevice
             )
-        )
-        finish()
+            val settings = settingsRepository.getCurrent()
+            if (needsHdrEmbeddedAudioWorkaround(viewing)) {
+                viewing = tryAttachStandardAudioCompanion(
+                    viewing,
+                    channel.contentId,
+                    channel.id?.value,
+                    Settings.StreamType.HLS
+                )
+            }
+            if (settings.useExternalAudio) {
+                val externalAudioPreferHdr = preferHdrManifestForDevice && !viewing.externalAudioRequired
+                viewing = tryAttachExternalAudio(
+                    viewing,
+                    channel.contentId,
+                    channel.id?.value,
+                    Settings.StreamType.HLS,
+                    externalAudioPreferHdr
+                )
+            }
+            currentViewing = viewing
+            val fragment = activePlaybackFragment()
+            fragment?.switchToViewing(viewing, preservePlaybackPosition = preservePosition)
+                ?: onViewingCreated(viewing)
+
+            val player = activePlaybackFragment()?.exoPlayerOrNull()
+            if (player != null && previousLayoutMode != RaceLayoutMode.FULLSCREEN) {
+                applyRaceLayout(previousLayoutMode, player)
+            }
+        } catch (e: ViewingService.TokenExpiredException) {
+            Log.e(TAG, "Token expired during channel switch", e)
+            handleError(R.string.unable_to_play_video_session_expired) {
+                startActivity(SignInActivity.intentClearTask(this))
+                finish()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Channel switch failed", e)
+            Toast.makeText(this, R.string.unable_to_play_video_message, Toast.LENGTH_SHORT).show()
+        }
     }
 
     /**
-     * Switch to the official Tracker feed (race map / timing tower video).
+     * Switch to the official Tracker feed (race map / timing tower video)
+     * only when the session is live and a tracker channel exists.
      */
     fun switchToRaceMap() {
-        val sessionId = ChannelPlaybackFragment.findSessionId(this) ?: return
         val contentId = ChannelPlaybackFragment.findContentId(this) ?: return
+        val isLive = ChannelPlaybackFragment.findIsLiveSession(this)
+        if (!isLive) {
+            Toast.makeText(this, R.string.player_map_not_live, Toast.LENGTH_SHORT).show()
+            return
+        }
         lifecycleScope.launch {
             val tracker = runCatching {
                 f1TvClient.getChannels(contentId)
@@ -255,17 +478,13 @@ class ChannelPlaybackActivity : FragmentActivity(R.layout.activity_channel_playb
             if (tracker.channelId == ChannelPlaybackFragment.findChannelId(this@ChannelPlaybackActivity)) {
                 return@launch
             }
-            startActivity(
-                intent(
-                    this@ChannelPlaybackActivity,
-                    sessionId,
-                    tracker.channelId,
-                    tracker.contentId,
-                    ChannelPlaybackFragment.findIsLiveSession(this@ChannelPlaybackActivity),
-                    ChannelPlaybackFragment.findSeasonYear(this@ChannelPlaybackActivity)
+            switchChannelInPlace(
+                BasicChannel(
+                    id = F1TvChannelId(tracker.channelId),
+                    contentId = tracker.contentId,
+                    type = F1TvBasicChannelType.Tracker
                 )
             )
-            finish()
         }
     }
 
@@ -331,12 +550,12 @@ class ChannelPlaybackActivity : FragmentActivity(R.layout.activity_channel_playb
             return requestedChannelId
         }
         return runCatching {
-            f1TvClient.getChannels(contentId)
-                .filterIsInstance<F1TvBasicChannel>()
-                .firstOrNull { it.type == F1TvBasicChannelType.Wif }
-                ?.channelId
+            val basic = f1TvClient.getChannels(contentId).filterIsInstance<F1TvBasicChannel>()
+            // Prefer F1 Live / PRES commentary over International / WIF.
+            basic.firstOrNull { it.type == F1TvBasicChannelType.F1Live }?.channelId
+                ?: basic.firstOrNull { it.type == F1TvBasicChannelType.Wif }?.channelId
         }.onFailure {
-            Log.w(TAG, "Failed to resolve preferred International channel: ${it.message}")
+            Log.w(TAG, "Failed to resolve preferred F1 Live/International channel: ${it.message}")
         }.getOrNull()
     }
 

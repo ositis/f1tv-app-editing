@@ -68,7 +68,7 @@ class SessionGridFragment : VerticalGridSupportFragment(), OnItemViewClickedList
         val contentId = findContentId(requireActivity()) ?: return requireActivity().finish()
         val viewModel: SessionBrowseViewModel by viewModels({ requireActivity() })
         lifecycleScope.launch {
-            lifecycle.repeatOnLifecycle(Lifecycle.State.CREATED) {
+            lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.session(sessionId, contentId).collect(::onUpdatedSession)
             }
         }

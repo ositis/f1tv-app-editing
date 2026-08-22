@@ -29,7 +29,13 @@
     <string name="teaser_image_description">Current season</string>
 
     <string name="home_all">Show all</string>
+    <string name="home_live_now">LIVE NOW</string>
+    <string name="home_weekend">Weekend</string>
     <string name="home_archive">Archive</string>
+    <string name="menu_hub">Explore</string>
+    <string name="menu_shows_docs">Shows &amp; docs</string>
+    <string name="shows_docs_shows_row">Shows</string>
+    <string name="shows_docs_documentaries_row">Documentaries</string>
 
     <string name="settings_content_description">Settings</string>
     <string name="settings_category_browse_title">Browse</string>
@@ -37,11 +43,17 @@
     <string name="settings_default_series_summary">Filter home and season browse to one championship</string>
     <string name="player_map_action">Map</string>
     <string name="player_map_unavailable">Tracker / race map is not available for this session</string>
-    <string name="player_multicam_action">Multi-cam</string>
+    <string name="player_layout_title">Race layout</string>
+    <string name="player_layout_fullscreen">Fullscreen</string>
+    <string name="player_layout_side">Side Multiview</string>
+    <string name="player_layout_quad">Quad View</string>
+    <string name="player_layout_applied">Layout: %1$s</string>
+    <string name="player_multicam_action">MultiView</string>
     <string name="player_multicam_unavailable">Onboard multi-cam is not available for this stream</string>
-    <string name="player_multicam_enabled">Multi-cam on (%1$d feeds · ≤480p)</string>
+    <string name="player_multicam_enabled">Multi-cam on (%1$d feeds · ≤480p). OK toggles · long-press Info for tips</string>
     <string name="player_multicam_disabled">Multi-cam off</string>
-    <string name="menu_hub">Explore</string>
+    <string name="player_multicam_help">Multi-cam: first onboard cams auto-pin muted at ≤480p. Play/pause/seek follow the main feed. Use Map only when live timing is available.</string>
+    <string name="player_map_not_live">Race map is available during live sessions with reliable timing</string>
     <string name="menu_race_calendar">Race calendar (Amsterdam)</string>
     <string name="menu_standings">Championship standings</string>
     <string name="menu_results">Race results</string>
@@ -80,6 +92,7 @@
     <string name="custom_radio_sync_close">Close</string>
     <string name="custom_radio_waiting_message">Waiting %1$s seconds for synchronization.</string>
     <string name="custom_radio_live_only_message">Custom radio is restricted to live sessions.</string>
+    <string name="custom_radio_unavailable_message">Custom radio is not configured. Add a URL in Settings or use the built-in stream.</string>
     <string name="settings_category_other_title">Other</string>
     <string name="settings_donations_title">Donations</string>
     <string name="settings_donations_summary">Support the project!</string>

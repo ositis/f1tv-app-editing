@@ -5,6 +5,7 @@ import androidx.leanback.widget.DiffCallback
 enum class HomeItemType {
     ARCHIVE,
     ARCHIVE_ALL,
+    SHOWS_DOCS,
     RACE_CALENDAR,
     STANDINGS,
     RESULTS

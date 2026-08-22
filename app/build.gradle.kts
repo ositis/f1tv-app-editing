@@ -12,22 +12,37 @@ rootProject.file(".env").takeIf { it.exists() }?.forEachLine { line ->
 }
 val f1BuildUsername = envProps["F1_username"] ?: ""
 val f1BuildPassword = envProps["F1_password"] ?: ""
-val appApplicationId = "com.st14n.f1"
-val appVersionCode = 7
-val appVersionName = "1.0.6"
+val appApplicationId = "com.ugisf1.tv"
+val appVersionCode = 201
+val appVersionName = "2.0.1"
 // Token refresh interval: default 6 hours; override in .env for testing (e.g. 300000 = 5 min)
 val tokenRefreshIntervalMs = envProps["TOKEN_REFRESH_INTERVAL_MS"]?.toLongOrNull()
     ?: (6L * 60 * 60 * 1000)
 // Custom Radio stream URL (set CUSTOM_RADIO_URL in .env to override defaults)
 val customRadioUrl = envProps["CUSTOM_RADIO_URL"]
     ?: ""
+
+fun readLocalSigningProperty(key: String): String? {
+    val fromGradle = project.properties[key] as String?
+    if (!fromGradle.isNullOrBlank()) return fromGradle
+    val signingFile = rootProject.file("signing.local.properties")
+    if (!signingFile.exists()) return null
+    for (line in signingFile.readLines()) {
+        val trimmed = line.trim()
+        if (trimmed.isEmpty() || trimmed.startsWith("#")) continue
+        val eqIdx = trimmed.indexOf('=')
+        if (eqIdx > 0 && trimmed.substring(0, eqIdx).trim() == key) {
+            return trimmed.substring(eqIdx + 1).trim()
+        }
+    }
+    return null
+}
+
 val hasCustomReleaseSigning = listOf(
     "signing.key.store.path",
     "signing.key.password",
     "signing.key.alias"
-).all { key ->
-    (project.properties[key] as String?)?.isNotBlank() == true
-}
+).all { key -> !readLocalSigningProperty(key).isNullOrBlank() }
 
 plugins {
     id("com.android.application")
@@ -69,16 +84,16 @@ android {
     signingConfigs {
         create("release") {
             if (hasCustomReleaseSigning) {
-                storeFile = project.properties["signing.key.store.path"]?.let { file(it) }
-                storePassword = project.properties["signing.key.password"] as String?
-                keyAlias = project.properties["signing.key.alias"] as String?
-                keyPassword = project.properties["signing.key.password"] as String?
+                storeFile = readLocalSigningProperty("signing.key.store.path")?.let { file(it) }
+                storePassword = readLocalSigningProperty("signing.key.password")
+                keyAlias = readLocalSigningProperty("signing.key.alias")
+                keyPassword = readLocalSigningProperty("signing.key.password")
             }
         }
     }
 
     buildTypes {
-        val appName = "F1 TV Player"
+        val appName = "UgisF1"
         getByName("debug") {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-DEBUG"
@@ -103,12 +118,12 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_21
-        targetCompatibility = JavaVersion.VERSION_21
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     kotlin {
-        jvmToolchain(21)
+        jvmToolchain(17)
     }
 
     buildFeatures {
@@ -123,6 +138,7 @@ android {
             excludes += "lib/**/ffprobe"
         }
         jniLibs {
+            useLegacyPackaging = true
             excludes += "**/ffmpeg"
             excludes += "**/ffprobe"
             excludes += "lib/**/ffmpeg"
@@ -241,5 +257,7 @@ dependencies {
     implementation("com.google.android.material:material:1.12.0")
     implementation("com.jakewharton.threetenabp:threetenabp:1.4.9")
     implementation("com.google.code.gson:gson:2.14.0")
+
+    testImplementation("junit:junit:4.13.2")
 }
 

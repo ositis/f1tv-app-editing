@@ -42,6 +42,7 @@ class SeasonBrowseFragment : BrowseSupportFragment(), OnItemViewClickedListener 
     private val eventListRowDiffCallback = EventListRowDiffCallback()
 
     private val eventsAdapter = ArrayObjectAdapter(ListRowPresenter())
+    private var cachedSeason: Season? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         Log.d(TAG, "onCreate")
@@ -116,7 +117,17 @@ class SeasonBrowseFragment : BrowseSupportFragment(), OnItemViewClickedListener 
         onItemViewClickedListener = this
     }
 
+    override fun onResume() {
+        super.onResume()
+        cachedSeason?.let { renderSeason(it) }
+    }
+
     private fun onUpdatedSeason(season: Season) {
+        cachedSeason = season
+        renderSeason(season)
+    }
+
+    private fun renderSeason(season: Season) {
         val seriesFilter = RacingSeries.fromPreference(settingsRepository.getCurrent().defaultSeries)
         title = if (seriesFilter == RacingSeries.ALL) {
             season.name
@@ -124,9 +135,11 @@ class SeasonBrowseFragment : BrowseSupportFragment(), OnItemViewClickedListener 
             "${season.name} · ${seriesFilter.badge}"
         }
         val existingListRows = eventsAdapter.unmodifiableList<ListRow>()
-        val newEventRows = season.events
-            .filter { it.sessions.isNotEmpty() }
-            .map { toListRow(it, existingListRows) }
+        val filteredEvents = season.events.map { event ->
+            if (seriesFilter == RacingSeries.ALL) event
+            else event.copy(sessions = event.sessions.filter { it.series == seriesFilter })
+        }.filter { it.sessions.isNotEmpty() }
+        val newEventRows = filteredEvents.map { toListRow(it, existingListRows) }
 
         var needsUpdate = existingListRows.size != newEventRows.size
         if (!needsUpdate) {

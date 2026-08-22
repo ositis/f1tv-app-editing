@@ -44,8 +44,10 @@ data class Settings(
             bypassChannelSelection = false,
             displayThumbnailsEnabled = true,
             openWithExternalPlayer = false,
-            disableUhdManifests = false,
-            disableHdrOn4kStreams = false,
+            // Protected HLG/HDR frequently shows green/pink static with audio-only on TV.
+            // Prefer standard HLS/SDR by default; user can opt into HDR/UHD in Settings.
+            disableUhdManifests = true,
+            disableHdrOn4kStreams = true,
             useExternalAudio = false,
             audioOffsetMs = 0L,
             customRadioDelayMs = 20_000L,
@@ -54,7 +56,7 @@ data class Settings(
             restrictCustomRadioToLiveSessions = false,
             f1Username = "",
             f1Password = "",
-            defaultSeries = "ALL"
+            defaultSeries = "F1"
         )
 
         const val KEY_BYPASS_CHANNEL_SELECTION = "bypass_channel_selection"

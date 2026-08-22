@@ -40,16 +40,56 @@ internal interface CustomRadioEngine {
 }
 
 internal object CustomRadioSources {
+    private val BUILTIN_SOURCES = listOf(
+        CustomRadioSource(
+            name = "grand-prix-radio",
+            url = "https://playerservices.streamtheworld.com/api/livestream-redirect/GRAND_PRIX_RADIO.mp3",
+            normalizeWithInAppHls = true
+        ),
+        CustomRadioSource(
+            name = "f1-live-timing-audio",
+            url = "https://livetiming.formula1.com/static/F1LiveTiming.mp3",
+            normalizeWithInAppHls = false,
+            disableIcyMetadata = true
+        )
+    )
+
     val defaultCandidate: CustomRadioSource?
-        get() = fr.groggy.racecontrol.tv.BuildConfig.CUSTOM_RADIO_URL
-            .takeIf { it.isNotBlank() }
-            ?.let {
-                CustomRadioSource(
-                    name = "configured-custom-radio",
-                    url = it,
-                    normalizeWithInAppHls = true
+        get() = buildPlan("", fr.groggy.racecontrol.tv.BuildConfig.CUSTOM_RADIO_URL)
+            .firstOrNull()
+            ?.source
+
+    fun buildPlan(settingsCustomUrl: String, buildConfigUrl: String): List<CustomRadioPlanEntry> {
+        val orderedSources = buildList {
+            settingsCustomUrl.trim().takeIf { it.isNotBlank() }?.let { url ->
+                add(
+                    CustomRadioSource(
+                        name = "settings-custom",
+                        url = url,
+                        normalizeWithInAppHls = true
+                    )
                 )
             }
+            buildConfigUrl.trim().takeIf { it.isNotBlank() }?.let { url ->
+                add(
+                    CustomRadioSource(
+                        name = "build-config",
+                        url = url,
+                        normalizeWithInAppHls = true
+                    )
+                )
+            }
+            addAll(BUILTIN_SOURCES)
+        }
+        return orderedSources
+            .distinctBy { it.url.trim().lowercase() }
+            .map {
+                CustomRadioPlanEntry(
+                    backend = Settings.CustomRadioBackend.EXOPLAYER,
+                    source = it
+                )
+            }
+    }
 }
 
 internal fun createCustomRadioEngine(

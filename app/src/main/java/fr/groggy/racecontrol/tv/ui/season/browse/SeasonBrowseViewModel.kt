@@ -3,6 +3,7 @@ package fr.groggy.racecontrol.tv.ui.season.browse
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
+import fr.groggy.racecontrol.tv.core.InstantPeriod
 import fr.groggy.racecontrol.tv.core.season.SeasonService
 import fr.groggy.racecontrol.tv.f1tv.Archive
 import fr.groggy.racecontrol.tv.f1tv.F1TvChannelId
@@ -14,6 +15,7 @@ import fr.groggy.racecontrol.tv.ui.session.SessionCard
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
+import org.threeten.bp.Instant
 import javax.inject.Inject
 
 @HiltViewModel
@@ -53,13 +55,17 @@ data class Session(
     override val series: RacingSeries,
     override val thumbnail: Image?,
     val largePictureUrl:String,
-    val channels: List<F1TvChannelId>
+    val channels: List<F1TvChannelId>,
+    val period: InstantPeriod
 ) : SessionCard {
 
     companion object {
         val diffCallback = DataClassByIdDiffCallback { session: Session -> session.id }
     }
 
+    fun isLiveNow(now: Instant = Instant.now()): Boolean {
+        return !period.start.isAfter(now) && !period.end.isBefore(now)
+    }
 }
 
 data class Image(

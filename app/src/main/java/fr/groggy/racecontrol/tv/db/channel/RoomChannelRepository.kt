@@ -60,10 +60,10 @@ class RoomChannelRepository @Inject constructor(
     }
 
     override suspend fun save(contentId: String, channels: List<F1TvChannel>) {
-        dao.deleteOld(contentId)
-
         val entities = channels.mapIndexed { index, f1TvChannel -> toEntity(index, f1TvChannel) }
-        dao.upsert(entities)
+        // Atomic replace avoids an empty intermediate Room emission that the UI
+        // used to mis-classify as SingleChannelSession.
+        dao.replaceAll(contentId, entities)
     }
 
     private fun toEntity(orderIndex: Int, channel: F1TvChannel): ChannelEntity {

@@ -29,8 +29,10 @@ output.json
 
 # Sensitive data
 *.jks
+*.keystore
 *.pem
 .env
+signing.local.properties
 
 # tmp & jadx folders
 tmp/

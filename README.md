@@ -1,58 +1,56 @@
-# Race Control TV
+# UgisF1
 
-Android TV client for watching F1 TV content with a remote-friendly Leanback UI.
+Android TV client for F1 TV — remote-friendly Leanback UI, sideload install (`com.ugisf1.tv`).
 
-This repository is an updated fork focused on current Android TV devices, local sideload installs, and up-to-date playback behavior. It is not affiliated with Formula 1 or F1 TV.
+**Current release:** `2.0.1` (versionCode 201)
 
-## What It Does
+Not affiliated with Formula 1 or F1 TV.
 
-- Browse current and archived sessions.
-- Play main feeds, onboard cameras, tracker/data channels, and other multi-channel session feeds when F1 TV exposes them.
-- Support multiple audio tracks, including commentary-free feeds when available.
-- Show and switch video quality from the player controls.
-- Display the active video quality and audio language in the playback overlay.
-- Support subtitles/closed captions when provided by the upstream stream.
-- Support custom radio audio injection with adjustable sync delay.
-- Use a TV-first sign-in flow instead of requiring a browser on another device.
+## What it does
 
-## Playback Notes
-
-- Playback capability depends on what F1 TV returns for a given session, region, account tier, and device path.
-- The app can use higher-quality streams, including 50 fps content and 4k HDR variants, when your subscription is eligible and the device can decode them.
-- If a preferred playback path fails, the app falls back to more widely compatible stream variants automatically.
+- Browse current season, archive years, and **Shows & docs** (editorial F1 TV pages).
+- Play main feeds, onboard cameras, Tracker/Data, pit lane, and other session channels.
+- **In-player channel switch** — change camera/feed without leaving playback.
+- **Multiview layouts** — fullscreen, side OBC strip, or quad (pit/tracker/data/OBC mix).
+- Live race **map shortcut** (Tracker feed) when the session is live.
+- Custom radio with sync delay; built-in streams or your own URL in Settings.
+- Series filter (F1 / F2 / F3 / Academy / Porsche) on home and season browse.
+- Race calendar (Amsterdam), championship standings, and race results (Jolpica).
+- HDR / 4K paths when subscription and device allow.
 
 ## Requirements
 
-- An Android TV or Google TV device running Android 9+.
-- A valid F1 TV subscription with access to the content you want to watch.
-- Sideloading enabled if you are installing the APK manually.
+- Android TV or Google TV, Android 9+ (API 28+).
+- Valid F1 TV subscription.
+- Sideloading enabled for APK install.
 
 ## Install
 
-This project is distributed as a sideloaded APK. It is not maintained through the Play Store.
-
 ### Prebuilt APK
 
-Download a release APK from your distribution point of choice and sideload it with ADB or your preferred TV installer.
+Release APK name: `com.ugisf1.tv-2.0.1.apk` (from `:app:assembleRelease`).
 
-### Build And Install From Source
+Install via ADB or your TV file manager / installer.
 
-1. Install JDK 21.
-2. Install the Android SDK and platform tools.
-3. Clone the repository.
-4. Optionally create a `.env` file in the project root for build-time defaults (see below).
-5. Use one of the Gradle install tasks below.
+### Build from source
 
-```powershell
-.\gradlew.bat :app:installDebug
-.\gradlew.bat :app:installRelease
+1. JDK 17+ and Android SDK (see `local.properties` for `sdk.dir`).
+2. Clone this repo.
+3. Optional: root `.env` for build-time defaults (see below).
+4. Optional: release signing in `signing.local.properties` (see `gradle.properties.signing.example` — **never commit passwords**).
+5. Build:
+
+```bash
+./gradlew :app:assembleRelease
+# or debug:
+./gradlew :app:assembleDebug
 ```
 
-If no custom release signing properties are configured, the release build falls back to the debug keystore so it remains installable for local testing.
+Output: `app/build/outputs/apk/release/com.ugisf1.tv-2.0.1.apk`
 
-## Optional `.env` Values
+If no release signing is configured, the release build uses the debug keystore (installable for local testing only).
 
-The app can read a few build-time defaults from a root `.env` file:
+## Optional `.env`
 
 ```dotenv
 F1_username=
@@ -61,65 +59,26 @@ TOKEN_REFRESH_INTERVAL_MS=
 CUSTOM_RADIO_URL=
 ```
 
-These are optional. The normal flow is still signing in on device and changing settings from the app UI.
+Sign-in on device is the normal path; `.env` only supplies optional build-time fallbacks.
+
+## Custom radio
+
+1. **Settings → Custom Radio URL** (optional).
+2. During playback: **Audio → Custom Radio**.
+3. Adjust delay via **Radio sync** or Settings → Radio sync delay.
+4. Enable **Prefer custom radio** for auto-start on live sessions.
+
+Built-in fallbacks are used when no URL is saved.
 
 ## Development
 
-### Toolchain
+- Kotlin, Hilt, Room, Moshi, Media3/ExoPlayer, Leanback.
+- Useful tasks: `assembleDebug`, `assembleRelease`, `installDebug`, `installRelease`.
 
-- Android Gradle Plugin based project with Kotlin DSL.
-- Kotlin + Coroutines.
-- Hilt for dependency injection.
-- Moshi for JSON.
-- Room for local persistence.
-- Media3 / ExoPlayer for playback.
-- JavaCV / FFmpeg for in-app custom radio normalization.
+## Changelog
 
-### Useful Commands
-
-```powershell
-.\gradlew.bat :app:assembleDebug
-.\gradlew.bat :app:assembleRelease
-.\gradlew.bat :app:compileDebugKotlin
-.\gradlew.bat :app:installDebug
-.\gradlew.bat :app:installRelease
-```
-
-## Current App Features
-
-- TV-native sign-in screen with saved credentials.
-- Home screen focused on current season and available sessions.
-- Session screen with per-channel browsing for onboard and data feeds.
-- Playback controls for seek, audio track selection, channel switching, quality selection, subtitles, and custom radio sync.
-- App language options for English, German, Spanish, French, Dutch, Polish, Portuguese, Russian, or system default.
-
-## Limitations
-
-- This app only plays streams and metadata that F1 TV currently exposes to the authenticated account.
-- Availability of subtitles, alternate audio, onboard feeds, HDR, or higher resolutions varies by session, subscription and device.
-- Buffering or stream-rule failures are often upstream service issues rather than local player bugs.
-- Changes on the F1 TV side can break playback without warning.
-
-## Screenshots
-
-![Browse current season](/screenshots/season_browse.png)
-
-![Browse sessions of an event](/screenshots/event_sessions_browse.png)
-
-![Channel selection of a multi-channel session](/screenshots/session_channel_selection.png)
-
-![Channel playback](/screenshots/channel_playback.png)
-
-![Channel audio selection](/screenshots/channel_audio_selection.png)
+See [CHANGELOG.md](CHANGELOG.md).
 
 ## Credits
 
-Thanks to [Groggy](https://github.com/Groggy), the original creator of the project this fork builds on.
-
-Thanks to the contributors to [f1viewer](https://github.com/SoMuchForSubtlety/f1viewer) for the public groundwork around F1 TV API behavior.
-
-Thanks to [Thiago Andrade](https://github.com/ttandrade) for the icon and visual design work carried forward in the project.
-
-Thanks to [Leonardo Rossetto](https://github.com/leonardoxh) for his earlier work this fork was built on.
-
-Thanks to [LoVega1337](https://github.com/LoVega1337) and [Loïc Yhuel](https://github.com/hwti) for their knowledge about the 4K/HDR manifest. 
+Fork lineage: [st14n/race-control-tv](https://github.com/st14n/race-control-tv), [Groggy](https://github.com/Groggy), [f1viewer](https://github.com/SoMuchForSubtlety/f1viewer), [leonardoxh](https://github.com/leonardoxh), and contributors noted in upstream history.
