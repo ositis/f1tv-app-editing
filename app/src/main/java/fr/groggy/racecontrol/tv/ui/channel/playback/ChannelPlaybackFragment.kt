@@ -893,11 +893,14 @@ class ChannelPlaybackFragment : VideoSupportFragment(), Player.Listener {
 
     override fun onStop() {
         super.onStop()
-        // Release the player early for MediaTek secure-codec surface teardown safety,
-        // but NEVER finish the activity here. Dialogs, HDR fragment replacement, and
-        // transient focus loss would otherwise kick users back to the channel selector.
-        Log.i(TAG, "onStop: releasing player (activity stays alive)")
-        releasePlayerSafely("onStop")
+        // Only tear down ExoPlayer when leaving playback for good. Releasing on every
+        // transient onStop (dialogs, brief focus loss) was killing live streams mid-race.
+        if (requireActivity().isFinishing) {
+            Log.i(TAG, "onStop: activity finishing — releasing player")
+            releasePlayerSafely("onStop")
+        } else {
+            Log.d(TAG, "onStop: keeping player alive")
+        }
     }
 
     override fun onDestroy() {

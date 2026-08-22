@@ -3,6 +3,8 @@ package fr.groggy.racecontrol.tv.ui.session.browse
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
+import android.widget.Toast
 import androidx.annotation.Keep
 import androidx.fragment.app.viewModels
 import androidx.leanback.app.VerticalGridSupportFragment
@@ -12,6 +14,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.launch
 import dagger.hilt.android.AndroidEntryPoint
+import fr.groggy.racecontrol.tv.R
 import fr.groggy.racecontrol.tv.core.settings.SettingsRepository
 import fr.groggy.racecontrol.tv.ui.channel.ChannelCardPresenter
 import fr.groggy.racecontrol.tv.ui.channel.playback.ChannelPlaybackActivity
@@ -23,6 +26,7 @@ import javax.inject.Inject
 class SessionGridFragment : VerticalGridSupportFragment(), OnItemViewClickedListener {
 
     companion object {
+        private val TAG = SessionGridFragment::class.simpleName
         private const val COLUMNS = 5
 
         private val CONTENT_ID = "${SessionGridFragment::class}.CONTENT_ID"
@@ -89,17 +93,25 @@ class SessionGridFragment : VerticalGridSupportFragment(), OnItemViewClickedList
     private fun onUpdatedSession(session: Session) {
         isLiveSession = session.isLiveSession
         when (session) {
-            is SingleChannelSession -> {
-                goToPlayback(session.contentId, session.channel?.value)
-                activity?.finish()
-            }
             is MultiChannelsSession -> {
+                if (session.channels.isEmpty()) {
+                    Toast.makeText(
+                        requireContext(),
+                        R.string.session_channels_load_error,
+                        Toast.LENGTH_LONG
+                    ).show()
+                    activity?.finish()
+                    return
+                }
                 title = session.name
                 channelsAdapter.setItems(session.channels, Channel.diffCallback)
 
                 if (settingsRepository.getCurrent().bypassChannelSelection) {
                     goToPlayback(session.contentId, channelId = null)
                 }
+            }
+            is SingleChannelSession -> {
+                Log.w(TAG, "SingleChannelSession in grid — waiting for full channel list")
             }
         }
     }

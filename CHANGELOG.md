@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.3 — 2026-08-22
+
+### Fixed
+- **Playback entry** — selecting a session always opens the camera/channel grid instead of skipping straight to a broken auto-play path.
+- **Stream stability** — stop releasing the ExoPlayer on transient `onStop` events that were killing live streams mid-session.
+
 ## 2.0.2 — 2026-08-22
 
 ### Added

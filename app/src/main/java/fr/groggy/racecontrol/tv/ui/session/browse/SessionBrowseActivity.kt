@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
@@ -52,20 +53,17 @@ class SessionBrowseActivity : FragmentActivity() {
         lifecycleScope.launch {
             lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 when (val session = viewModel.sessionLoaded(sessionId, contentId)) {
-                    is SingleChannelSession -> {
-                        startActivity(
-                            ChannelPlaybackActivity.intent(
-                                this@SessionBrowseActivity,
-                                sessionId,
-                                session.channel?.value,
-                                session.contentId,
-                                session.isLiveSession,
-                                seasonYear
-                            )
-                        )
-                        finish()
-                    }
                     is MultiChannelsSession -> {
+                        if (session.channels.isEmpty()) {
+                            Log.e(TAG, "Channel list empty after load for contentId=$contentId")
+                            Toast.makeText(
+                                this@SessionBrowseActivity,
+                                R.string.session_channels_load_error,
+                                Toast.LENGTH_LONG
+                            ).show()
+                            finish()
+                            return@repeatOnLifecycle
+                        }
                         if (settingsRepository.getCurrent().bypassChannelSelection) {
                             Log.d(TAG, "Bypass channel selection — opening playback")
                             startActivity(
@@ -85,6 +83,13 @@ class SessionBrowseActivity : FragmentActivity() {
                                 .replace(R.id.fragment_container, SessionGridFragment())
                                 .commitNowAllowingStateLoss()
                         }
+                    }
+                    is SingleChannelSession -> {
+                        // Legacy path — should not be emitted anymore; show grid if we ever get here.
+                        Log.w(TAG, "Unexpected SingleChannelSession — showing channel grid fallback")
+                        supportFragmentManager.beginTransaction()
+                            .replace(R.id.fragment_container, SessionGridFragment())
+                            .commitNowAllowingStateLoss()
                     }
                 }
             }

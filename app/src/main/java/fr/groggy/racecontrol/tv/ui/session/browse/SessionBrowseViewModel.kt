@@ -57,19 +57,24 @@ class SessionBrowseViewModel @Inject constructor(
             }
             val isLiveSession = session.isLiveNow()
             Log.d(TAG, "Loaded channel count ${channelList.size}")
-            if (channelList.size <= 1) {
-                SingleChannelSession(
-                    contentId = session.contentId,
-                    channel = channelList.firstOrNull()?.id,
-                    isLiveSession = isLiveSession
-                )
-            } else {
-                MultiChannelsSession(
-                    contentId = session.contentId,
-                    name = session.name,
-                    channels = channelList,
-                    isLiveSession = isLiveSession
-                )
+            when {
+                channelList.isEmpty() -> {
+                    Log.w(TAG, "No channels loaded for contentId=${session.contentId}")
+                    MultiChannelsSession(
+                        contentId = session.contentId,
+                        name = session.name,
+                        channels = emptyList(),
+                        isLiveSession = isLiveSession,
+                    )
+                }
+                else -> {
+                    MultiChannelsSession(
+                        contentId = session.contentId,
+                        name = session.name,
+                        channels = channelList,
+                        isLiveSession = isLiveSession,
+                    )
+                }
             }
         }
             .filterNotNull()
