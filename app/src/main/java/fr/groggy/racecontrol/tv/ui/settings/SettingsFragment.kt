@@ -11,6 +11,7 @@ import android.view.inputmethod.InputMethodManager
 import android.webkit.CookieManager
 import android.widget.EditText
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.Keep
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
@@ -25,8 +26,13 @@ import dagger.hilt.android.AndroidEntryPoint
 import fr.groggy.racecontrol.tv.R
 import fr.groggy.racecontrol.tv.core.settings.Settings
 import fr.groggy.racecontrol.tv.core.settings.SettingsViewModel
+import fr.groggy.racecontrol.tv.core.update.AppUpdateCheckResult
+import fr.groggy.racecontrol.tv.core.update.AppUpdateManager
+import fr.groggy.racecontrol.tv.core.update.AppUpdateManifest
+import fr.groggy.racecontrol.tv.core.update.InstallPermissionRequiredException
 import fr.groggy.racecontrol.tv.ui.signin.SignInActivity
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 @Keep
 @AndroidEntryPoint
@@ -81,13 +87,44 @@ class SettingsFragment: LeanbackSettingsFragmentCompat() {
     @AndroidEntryPoint
     class PreferenceFragment: LeanbackPreferenceFragmentCompat() {
         private val viewModel: SettingsViewModel by viewModels({ requireParentFragment() })
+
+        @Inject lateinit var appUpdateManager: AppUpdateManager
+
         private var currentAccountPreference: Preference? = null
+        private var updatePreference: Preference? = null
+        private var pendingUpdate: AppUpdateManifest? = null
+        private var progressDialog: AlertDialog? = null
+
+        private val installPermissionLauncher = registerForActivityResult(
+            ActivityResultContracts.StartActivityForResult()
+        ) {
+            if (appUpdateManager.canInstallPackages()) {
+                pendingUpdate?.let { startDownloadAndInstall(it) }
+            } else {
+                Toast.makeText(
+                    requireContext(),
+                    R.string.update_install_permission_denied,
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
 
         override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
             setPreferencesFromResource(R.xml.preferences, rootKey)
 
             currentAccountPreference = findPreference("current_account")
             updateCurrentAccountSummary()
+
+            updatePreference = findPreference<Preference>("check_for_updates")?.also { preference ->
+                preference.summary = getString(
+                    R.string.settings_check_for_updates_summary,
+                    appUpdateManager.installedVersionName
+                )
+                preference.setOnPreferenceClickListener {
+                    checkForUpdates()
+                    true
+                }
+            }
 
             findPreference<Preference>(Settings.KEY_F1_USERNAME)?.setOnPreferenceChangeListener { _, _ ->
                 updateCurrentAccountSummary()
@@ -210,6 +247,112 @@ class SettingsFragment: LeanbackSettingsFragmentCompat() {
                     }
                 }
                 .show()
+        }
+
+        override fun onDestroyView() {
+            progressDialog?.dismiss()
+            progressDialog = null
+            super.onDestroyView()
+        }
+
+        private fun checkForUpdates() {
+            showProgress(getString(R.string.update_checking))
+            lifecycleScope.launch {
+                when (val result = appUpdateManager.checkForUpdate()) {
+                    is AppUpdateCheckResult.UpToDate -> {
+                        dismissProgress()
+                        AlertDialog.Builder(requireContext())
+                            .setMessage(
+                                getString(
+                                    R.string.update_up_to_date,
+                                    appUpdateManager.installedVersionName
+                                )
+                            )
+                            .setPositiveButton(android.R.string.ok, null)
+                            .show()
+                    }
+                    is AppUpdateCheckResult.UpdateAvailable -> promptInstallUpdate(result.manifest)
+                    is AppUpdateCheckResult.Error -> {
+                        dismissProgress()
+                        Toast.makeText(
+                            requireContext(),
+                            R.string.update_check_failed,
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                }
+            }
+        }
+
+        private fun promptInstallUpdate(manifest: AppUpdateManifest) {
+            dismissProgress()
+            pendingUpdate = manifest
+            AlertDialog.Builder(requireContext())
+                .setTitle(R.string.update_available_title)
+                .setMessage(getString(R.string.update_available_message, manifest.versionName))
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton(android.R.string.ok) { _, _ ->
+                    if (appUpdateManager.canInstallPackages()) {
+                        startDownloadAndInstall(manifest)
+                    } else {
+                        requestInstallPermission()
+                    }
+                }
+                .show()
+        }
+
+        private fun requestInstallPermission() {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+                pendingUpdate?.let { startDownloadAndInstall(it) }
+                return
+            }
+            AlertDialog.Builder(requireContext())
+                .setTitle(R.string.update_install_permission_title)
+                .setMessage(R.string.update_install_permission_message)
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton(android.R.string.ok) { _, _ ->
+                    val intent = android.content.Intent(
+                        android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                        android.net.Uri.parse("package:${requireContext().packageName}")
+                    )
+                    installPermissionLauncher.launch(intent)
+                }
+                .show()
+        }
+
+        private fun startDownloadAndInstall(manifest: AppUpdateManifest) {
+            showProgress(getString(R.string.update_downloading))
+            lifecycleScope.launch {
+                try {
+                    val apkFile = appUpdateManager.downloadUpdate(manifest)
+                    dismissProgress()
+                    appUpdateManager.installDownloadedApk(apkFile)
+                } catch (_: InstallPermissionRequiredException) {
+                    dismissProgress()
+                    requestInstallPermission()
+                } catch (_: Exception) {
+                    dismissProgress()
+                    Toast.makeText(
+                        requireContext(),
+                        R.string.update_download_failed,
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            }
+        }
+
+        private fun showProgress(message: String) {
+            progressDialog?.dismiss()
+            progressDialog = AlertDialog.Builder(requireContext())
+                .setMessage(message)
+                .setCancelable(false)
+                .create()
+                .also { it.show() }
+        }
+
+        private fun dismissProgress() {
+            progressDialog?.dismiss()
+            progressDialog = null
         }
 
         private fun updateCurrentAccountSummary() {

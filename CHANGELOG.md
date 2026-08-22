@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0.2 — 2026-08-22
+
+### Added
+- **In-app updates** — Settings → Check for updates downloads and installs new APKs (with unknown-sources permission flow).
+
 ## 2.0.1 — 2026-08-22
 
 Major playback and browse fixes for **UgisF1** (`com.ugisf1.tv`).

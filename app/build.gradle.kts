@@ -13,8 +13,8 @@ rootProject.file(".env").takeIf { it.exists() }?.forEachLine { line ->
 val f1BuildUsername = envProps["F1_username"] ?: ""
 val f1BuildPassword = envProps["F1_password"] ?: ""
 val appApplicationId = "com.ugisf1.tv"
-val appVersionCode = 201
-val appVersionName = "2.0.1"
+val appVersionCode = 202
+val appVersionName = "2.0.2"
 // Token refresh interval: default 6 hours; override in .env for testing (e.g. 300000 = 5 min)
 val tokenRefreshIntervalMs = envProps["TOKEN_REFRESH_INTERVAL_MS"]?.toLongOrNull()
     ?: (6L * 60 * 60 * 1000)
@@ -79,6 +79,16 @@ android {
         buildConfigField("long", "TOKEN_REFRESH_INTERVAL_MS", "${tokenRefreshIntervalMs}L")
         buildConfigField("String", "CUSTOM_RADIO_URL",
             "\"${customRadioUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
+        buildConfigField(
+            "String",
+            "UPDATE_MANIFEST_URLS",
+            "\"http://213.142.133.73:8767/version.json,https://raw.githubusercontent.com/ositis/f1tv-app-editing/main/version.json\""
+        )
+        buildConfigField(
+            "String",
+            "UPDATE_APK_FALLBACK_URL",
+            "\"http://213.142.133.73:8767/UgisF1.apk\""
+        )
     }
 
     signingConfigs {

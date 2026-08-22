@@ -2,7 +2,7 @@
 
 Android TV client for F1 TV — remote-friendly Leanback UI, sideload install (`com.ugisf1.tv`).
 
-**Current release:** `2.0.1` (versionCode 201)
+**Current release:** `2.0.2` (versionCode 202)
 
 Not affiliated with Formula 1 or F1 TV.
 
@@ -28,9 +28,9 @@ Not affiliated with Formula 1 or F1 TV.
 
 ### Prebuilt APK
 
-Release APK name: `com.ugisf1.tv-2.0.1.apk` (from `:app:assembleRelease`).
+Release APK name: `com.ugisf1.tv-2.0.2.apk` (from `:app:assembleRelease`).
 
-Install via ADB or your TV file manager / installer.
+Install via ADB, your TV file manager, or **Settings → Check for updates** inside the app (after sideloading once).
 
 ### Build from source
 
@@ -46,7 +46,13 @@ Install via ADB or your TV file manager / installer.
 ./gradlew :app:assembleDebug
 ```
 
-Output: `app/build/outputs/apk/release/com.ugisf1.tv-2.0.1.apk`
+Output: `app/build/outputs/apk/release/com.ugisf1.tv-2.0.2.apk`
+
+### In-app updates
+
+After the first sideload, open **Settings → Check for updates**. The app fetches `version.json` from the update server (with GitHub raw fallback), downloads `UgisF1.apk`, and installs it in place. If Android blocks installs, the app opens **Install unknown apps** for UgisF1 — enable it once, then check again.
+
+Update manifest (edit on each release): [`version.json`](version.json)
 
 If no release signing is configured, the release build uses the debug keystore (installable for local testing only).
 
