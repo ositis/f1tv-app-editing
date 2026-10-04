@@ -45,6 +45,8 @@ You can sign in three ways:
 F1's account API sometimes blocks password logins from non-browser clients (HTTP 403). If that
 happens, use option 2 or the proxy below.
 
+For how this differs from the Android app's WebView login, and why, see [LOGIN.md](LOGIN.md).
+
 ## Install on the TV (Tizen Studio)
 
 One-time setup:
