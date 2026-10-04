@@ -50,3 +50,10 @@ analysis/
 *.jar
 *.mp4
 *.m3u8
+
+# Tizen app
+tizen/js/local.js
+tizen/dist/
+tizen/.buildResult/
+tizen/.sign/
+*.wgt

@@ -18,6 +18,10 @@ Not affiliated with Formula 1 or F1 TV.
 - Race calendar (Amsterdam), championship standings, and race results (Jolpica).
 - HDR / 4K paths when subscription and device allow.
 
+## Samsung TV (Tizen)
+
+A Tizen web app port lives in [`tizen/`](tizen/README.md) — same browsing and feed switching, Shaka Player + Widevine for 2018+ Samsung TVs.
+
 ## Requirements
 
 - Android TV or Google TV, Android 9+ (API 28+).
